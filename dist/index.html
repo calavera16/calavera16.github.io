@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#141716" />
+    <meta name="description" content="Yeon Jun Kim — Student portfolio. A transmission from deep space." />
+    <title>Yeon Jun Kim // Transmission</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141716'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%23e3b871' stroke-width='2'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23e3b871'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="station.css?v=site-type-1" />
+    <link rel="stylesheet" href="typography.css?v=site-type-1" />
+    <script defer src="ascii-intro.js?v=polished-1"></script>
+    <script defer src="station.js?v=polished-1"></script>
+  </head>
+  <body data-stage="space">
+    <main>
+      <section
+        id="space"
+        class="stage space"
+        aria-label="Incoming transmission"
+      >
+        <div id="ascii-intro-shell" class="console-shell intro-shell">
+          <header class="console-band">
+            <span class="band-left"><span data-station-name>SEL / SEOUL RX</span><span class="band-mode"> // DEEP-SPACE TELEMETRY</span></span>
+            <span class="band-session">SESSION <time data-session-utc>--:--:-- UTC</time></span>
+          </header>
+          <div class="console-heading">
+            <div class="intro-heading-group">
+              <h1>Incoming transmission</h1>
+              <span class="intro-range" id="intro-range">DIST 41.8 LY // ECLIPTIC SECTOR</span>
+            </div>
+            <span class="state-tag" id="intro-state">SCANNING DEEP SPACE</span>
+          </div>
+          <fieldset class="station-panel intro-panel">
+            <legend>OPTICAL TELEMETRY // CRT FEED</legend>
+            <div class="intro-viewport" role="img" aria-label="An animated ASCII telemetry feed tracks a signal from deep space, through Earth orbit to Seoul, and into a rooftop radio telescope.">
+              <div class="intro-screen">
+                <pre id="intro-grid" class="intro-layer intro-grid intro-wide" aria-hidden="true"></pre>
+                <pre id="intro-cool" class="intro-layer intro-cool intro-wide" aria-hidden="true"></pre>
+                <pre id="intro-warm" class="intro-layer intro-warm intro-wide" aria-hidden="true"></pre>
+                <pre id="intro-struct" class="intro-layer intro-struct intro-wide" aria-hidden="true"></pre>
+                <pre id="intro-signal" class="intro-layer intro-signal intro-wide" aria-hidden="true"></pre>
+                <pre id="intro-fx" class="intro-layer intro-fx intro-wide" aria-hidden="true"></pre>
+                <pre id="intro-grid-narrow" class="intro-layer intro-grid intro-narrow" aria-hidden="true"></pre>
+                <pre id="intro-cool-narrow" class="intro-layer intro-cool intro-narrow" aria-hidden="true"></pre>
+                <pre id="intro-warm-narrow" class="intro-layer intro-warm intro-narrow" aria-hidden="true"></pre>
+                <pre id="intro-struct-narrow" class="intro-layer intro-struct intro-narrow" aria-hidden="true"></pre>
+                <pre id="intro-signal-narrow" class="intro-layer intro-signal intro-narrow" aria-hidden="true"></pre>
+                <pre id="intro-fx-narrow" class="intro-layer intro-fx intro-narrow" aria-hidden="true"></pre>
+              </div>
+              <div class="crt-scanlines" aria-hidden="true"></div>
+            </div>
+          </fieldset>
+          <footer class="console-footer intro-footer">
+            <div class="intro-footer-left">
+              <pre id="intro-progress" class="intro-progress" aria-hidden="true">[&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;]   0%</pre>
+              <span class="intro-feed-meta">245&times;83 CRT // 20 Hz</span>
+            </div>
+            <div class="intro-footer-actions">
+              <a id="intro-portfolio-link" class="intro-btn intro-btn-primary" href="portfolio.html">Portfolio <span aria-hidden="true">&rarr;</span></a>
+              <button type="button" id="intro-skip-btn" class="intro-btn" data-action="skip" aria-keyshortcuts="Escape">Skip intro <kbd aria-hidden="true">Esc</kbd></button>
+            </div>
+          </footer>
+        </div>
+      </section>
+      <section
+        id="terminal"
+        class="stage terminal"
+        aria-labelledby="terminal-title"
+        hidden
+        inert
+      >
+        <div class="console-shell terminal-content">
+          <header class="console-band"><span class="band-left"><span data-station-name>SEL / SEOUL RX</span><span class="band-mode"> // RECEIVER CONSOLE</span></span><span class="band-session">SESSION <time data-session-utc>--:--:-- UTC</time></span></header>
+          <div class="console-heading receiver-heading">
+            <div class="receiver-title">
+              <h1 id="terminal-title">Astronomical receiving station</h1>
+              <span class="state-tag" id="capture-state">CAPTURE HELD</span>
+            </div>
+            <button type="button" class="command" data-action="decode" aria-keyshortcuts="Enter" disabled><span aria-hidden="true">[ Enter ] </span>Decode</button>
+          </div>
+          <div class="reception-grid">
+            <fieldset class="station-panel packet-panel"><legend>RECEIVER</legend>
+              <p class="receiver-name" data-receiver-name>Seoul, South Korea</p>
+              <p class="receiver-location" id="receiver-location"><span data-receiver-coordinates>37.5665 N / 126.9780 E</span></p>
+              <dl class="packet-data">
+                <dt>RECEIVED</dt><dd><time data-receive-utc>Awaiting capture</time></dd>
+                <dt>PAYLOAD</dt><dd><span data-payload-bytes>--</span> bytes / UTF-8</dd>
+                <dt>BUFFER</dt><dd>01 message</dd>
+                <dt>STATE</dt><dd class="quiet-state">Ready to decode</dd>
+              </dl>
+            </fieldset>
+            <fieldset class="station-panel spectrum-panel"><legend>RF SPECTRUM</legend>
+              <div class="scope-meta"><span>RELATIVE POWER</span><span>CARRIER / 0 kHz</span></div>
+              <div class="spectrum-scroll" role="img" aria-label="Captured radio spectrum: a narrow carrier centered at zero kilohertz above a textured noise floor. Relative frequency offsets run from minus four to plus four kilohertz.">
+                <div class="spectrum-plot spectrum-wide" aria-hidden="true"><pre id="spectrum-grid"></pre><pre id="spectrum-trace"></pre></div>
+                <pre id="spectrum-axis" class="spectrum-axis spectrum-wide" aria-hidden="true"></pre>
+                <div class="spectrum-plot spectrum-narrow" aria-hidden="true"><pre id="spectrum-grid-narrow"></pre><pre id="spectrum-trace-narrow"></pre></div>
+                <pre id="spectrum-axis-narrow" class="spectrum-axis spectrum-narrow" aria-hidden="true"></pre>
+              </div>
+            </fieldset>
+          </div>
+          <fieldset class="station-panel event-panel"><legend>EVENT LOG</legend><ol id="receive-log"><li>Waiting for reception.</li></ol></fieldset>
+          <footer class="console-footer"><span class="operator-prompt">OPERATOR / Message held in receive buffer.</span><a id="terminal-portfolio-link" class="stay" href="portfolio.html">Open portfolio <span aria-hidden="true">&rarr;</span></a></footer>
+        </div>
+      </section>
+      <section
+        id="decoder"
+        class="stage decoder"
+        aria-label="Decoding transmission"
+        hidden
+        inert
+      >
+        <div class="console-shell decoder-content" tabindex="-1">
+          <header class="console-band"><span class="band-left"><span data-station-name>SEL / SEOUL RX</span><span class="band-mode"> // PAYLOAD DECODER</span></span><span class="band-session">SESSION <time data-session-utc>--:--:-- UTC</time></span></header>
+          <div class="console-heading"><h2>Payload decoder</h2><span class="state-tag" id="decoder-state">DECODING</span></div>
+          <fieldset class="station-panel decode-panel"><legend>DECODE BUFFER</legend>
+            <p class="decode-source"><span data-payload-bytes>--</span> bytes / UTF-8 / 01 message</p>
+            <p id="decode-buffer" aria-hidden="true"><span id="decode-settled"></span><span id="decode-scrambled"></span></p>
+            <div class="progress-meta"><label for="decode-progress">Decoding transmission</label><output id="decode-percent" aria-live="off">0%</output></div>
+            <pre id="decode-segments" aria-hidden="true">[                                ]</pre>
+            <progress id="decode-progress" value="0" max="100">0%</progress>
+            <p id="decode-step" class="quiet-state" role="status">Reading receive buffer.</p>
+          </fieldset>
+          <footer class="console-footer"><span>RECEIVED <time data-receive-utc>Awaiting capture</time></span><span>LOCAL DECODE</span></footer>
+        </div>
+      </section>
+      <section
+        id="message"
+        class="stage message"
+        aria-label="Decoded transmission"
+        hidden
+        inert
+      >
+        <div class="console-shell message-content">
+          <header class="console-band"><span class="band-left"><span data-station-name>SEL / SEOUL RX</span><span class="band-mode"> // DECODED TRANSMISSION</span></span><span class="band-session">SESSION <time data-session-utc>--:--:-- UTC</time></span></header>
+          <div class="console-heading"><h2>Decoded transmission</h2><span class="state-tag">MESSAGE READY</span></div>
+          <fieldset class="station-panel message-panel"><legend>MESSAGE / UTF-8</legend>
+          <blockquote tabindex="-1">
+            Twenty years from now you will be more disappointed by the things
+            that you didn't do than by the ones you did do. So throw off the
+            bowlines. Sail away from the safe harbor. Catch the trade winds in
+            your sails. Explore. Dream. Discover.
+          </blockquote>
+          <p class="message-attribution">OPERATOR // YEON JUN KIM &middot; STUDENT &middot; SEOUL</p>
+          </fieldset>
+          <div id="portfolio-handoff" class="portfolio-handoff">
+            <a class="command portfolio-link" data-action="portfolio" href="portfolio.html" aria-keyshortcuts="Enter"><span aria-hidden="true">[ Enter ] </span>Open portfolio <span aria-hidden="true">&rarr;</span></a>
+          </div>
+          <footer class="console-footer"><span><span data-payload-bytes>--</span> BYTES / DECODE COMPLETE</span><button type="button" class="replay" data-action="replay">Replay transmission</button></footer>
+        </div>
+      </section>
+      <noscript>
+        <div class="noscript-fallback">
+          <div class="console-shell">
+            <header class="console-band"><span>SEL / SEOUL RX</span><span>STATIC MODE</span></header>
+            <div class="console-heading"><h1>Astronomical receiving station</h1><span class="state-tag">JS DISABLED</span></div>
+            <p class="noscript-copy">The animated transmission opening requires JavaScript. You can open the portfolio directory directly below.</p>
+            <p><a class="command portfolio-link" href="portfolio.html">Open portfolio <span aria-hidden="true">&rarr;</span></a></p>
+          </div>
+        </div>
+      </noscript>
+    </main>
+  </body>
+</html>

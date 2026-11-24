@@ -1,0 +1,74 @@
+/* Shared reading hierarchy for both entry points. Instrument controls, telemetry,
+   and character-cell canvases retain their own functional type sizes. */
+:root {
+  --type-title: clamp(1.5rem, .5rem + 1.25vw, 2.25rem);
+  --type-section: clamp(1.3125rem, .375rem + 1.25vw, 2rem);
+  --type-heading: clamp(1.125rem, .25rem + 1.25vw, 1.75rem);
+  --type-description: clamp(.875rem, .8rem + .2vw, 1rem);
+}
+
+/* Stage and dossier titles share one role, regardless of native heading level.
+   The load-failure title is created by the landing controller. */
+.console-heading :is(h1, h2),
+.destination .record-head h2,
+.load-failure > h1 {
+  margin: 0;
+  font-size: var(--type-title);
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.station-panel legend,
+.destination h3 {
+  font-size: var(--type-section);
+  font-weight: 700;
+  line-height: 1.3;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.destination h4 {
+  font-size: var(--type-heading);
+  font-weight: 700;
+  line-height: 1.35;
+  margin-block: 0 .6em;
+}
+
+/* Includes unclassed Research/About paragraphs and live inspector summaries.
+   Metadata and control labels intentionally keep their instrument sizing. */
+.destination p:not(.record-meta),
+.destination > :is(ul, ol):not(.tag-list, .link-row),
+.standby-copy,
+.noscript-copy,
+.chart-noscript,
+.operator-prompt,
+.receiver-name,
+#decode-buffer,
+#decode-step {
+  font-size: var(--type-description);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.destination p:not(.record-meta) { margin-block: 0 1em; }
+
+/* The decoded passage keeps its current face and a larger reading emphasis. */
+.message blockquote {
+  font-size: var(--type-section);
+  line-height: 1.5;
+}
+
+/* Long titles and legends wrap inside the existing console geometry. */
+.console-heading > :is(h1, h2),
+.heading-group,
+.intro-heading-group,
+.receiver-title { min-width: 0; max-width: 100%; }
+.heading-group, .intro-heading-group { flex: 1 1 30ch; }
+.station-panel legend { padding-inline: .5em; }
+.index-link { min-width: 0; }
+.idx-label { overflow-wrap: anywhere; }
+

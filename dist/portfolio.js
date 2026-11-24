@@ -1,0 +1,1348 @@
+/* Native fragments own navigation; the controller renders the high-resolution
+   multi-color ASCII starmap, animated phosphor FX layer, reticle overlays,
+   inspector telemetry, focus restoration and scan controls. */
+(() => {
+  'use strict';
+
+  const chart = document.querySelector('.star-chart');
+  const toggle = document.getElementById('sweep-toggle');
+  const scanState = document.getElementById('scan-state');
+  const cursorReadout = document.getElementById('cursor-readout');
+  const inspTarget = document.getElementById('insp-target');
+  const inspCoords = document.getElementById('insp-coords');
+  const inspClass = document.getElementById('insp-class');
+  const inspStatus = document.getElementById('insp-status');
+  const inspectorPrompt = document.getElementById('inspector-prompt');
+  const inspectorSummary = document.getElementById('inspector-summary');
+  const telemetryLog = document.getElementById('telemetry-log');
+  const contacts = [...document.querySelectorAll('[data-contact]')];
+  const navLinks = [...document.querySelectorAll('[data-nav]')];
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const compact = matchMedia('(max-width: 900px), (max-height: 599px)');
+  const narrowMedia = matchMedia('(max-width: 700px)');
+  const replay = document.querySelector('.replay');
+
+  const CATALOG = [
+    {
+      id: 'projects', key: '1', code: 'HD-01', sector: 'SEC-A1', label: 'Projects',
+      designation: 'HD-01 / PROJECTS', coords: 'RA 04h18m / DEC +31\u00b014\'',
+      spectral: 'K2 III / 41.8 LY', labelSide: 'right',
+      wide: { col: 21, row: 9 }, narrow: { col: 10, row: 5 },
+    },
+    {
+      id: 'research', key: '2', code: 'HD-02', sector: 'SEC-C3', label: 'Research',
+      designation: 'HD-02 / RESEARCH', coords: 'RA 07h25m / DEC -24\u00b042\'',
+      spectral: 'B3 V / 118.4 LY', labelSide: 'right',
+      wide: { col: 44, row: 26 }, narrow: { col: 20, row: 16 },
+    },
+    {
+      id: 'about', key: '3', code: 'HD-03', sector: 'SEC-B2', label: 'About',
+      designation: 'HD-03 / ABOUT', coords: 'RA 17h42m / DEC +19\u00b008\'',
+      spectral: 'G8 IV / 63.2 LY', labelSide: 'left',
+      wide: { col: 83, row: 15 }, narrow: { col: 40, row: 10 },
+    },
+    {
+      id: 'contact', key: '4', code: 'HD-04', sector: 'SEC-D4', label: 'Contact',
+      designation: 'HD-04 / CONTACT', coords: 'RA 19h08m / DEC -39\u00b015\'',
+      spectral: 'F5 V / 87.6 LY', labelSide: 'left',
+      wide: { col: 101, row: 33 }, narrow: { col: 47, row: 21 },
+    },
+  ];
+  const catalogById = new Map(CATALOG.map(entry => [entry.id, entry]));
+  const sections = new Set(CATALOG.map(entry => entry.id));
+  // Keep existing #work bookmarks without redirecting or adding history entries.
+  const routeId = () => location.hash === '#work' ? 'projects' : location.hash.slice(1);
+
+  const WIDE_SPEC = { cols: 121, rows: 41, key: 'wide', suffix: '' };
+  const NARROW_SPEC = { cols: 57, rows: 25, key: 'narrow', suffix: '-narrow' };
+
+  // An open, asymmetric constellation spine following 01 -> 02 -> 03 -> 04 left to right.
+  const ROUTES = [
+    ['projects', 'research', false],
+    ['research', 'about', false],
+    ['about', 'contact', false],
+  ];
+
+  // Deep-space catalog landmarks with spectral tint & diffraction spikes.
+  const WAYPOINTS_WIDE = [
+    { col: 48, row: 6, glyph: '*', tag: 'CYG-X1', tone: 'cool', cross: true },
+    { col: 15, row: 24, glyph: '*', tag: 'VELA-P', tone: 'cool', cross: true },
+    { col: 66, row: 23, glyph: '*', tag: 'SGR-A*', tone: 'warm', cross: true, pulsar: true },
+    { col: 103, row: 8, glyph: '+', tag: 'LYR-04', tone: 'cool', cross: false },
+    { col: 64, row: 35, glyph: '*', tag: 'ORI-M42', tone: 'warm', cross: true },
+    { col: 17, row: 34, glyph: '+', tag: 'CAR-09', tone: 'warm', cross: false },
+  ];
+
+  const WAYPOINTS_NARROW = [
+    { col: 26, row: 4, glyph: '*', tag: 'CYG', tone: 'cool', cross: false },
+    { col: 7, row: 14, glyph: '+', tag: 'VEL', tone: 'cool', cross: false },
+    { col: 32, row: 14, glyph: '*', tag: 'SGR', tone: 'warm', cross: false, pulsar: true },
+    { col: 48, row: 5, glyph: '+', tag: '', tone: 'cool', cross: false },
+    { col: 30, row: 21, glyph: '+', tag: 'ORI', tone: 'warm', cross: false },
+  ];
+
+  const SCAN_PERIOD_MS = 18000;
+  const FX_STEP_MS = 75; // ~13.3 Hz crisp character-cell terminal refresh cadence
+  const SHUFFLE_CYCLE_MS = 4800;
+
+  let held = false;
+  let departed = false;
+  let returnTarget = null;
+  let lastActivated = null;
+  let pointerId = null;
+  let keyboardId = null;
+  let inputMode = 'keyboard';
+  let currentRoute = '';
+  let fxFrame = 0;
+  let lastFrameNow = null;
+  let lastPaintMs = -Infinity;
+  let animElapsedMs = 0;
+  let shuffleElapsedMs = 0;
+
+  const animData = new Map();
+
+  const logLines = [
+    'RX handoff complete // console linked.',
+    'High-res 121x41 astrometric grid online.',
+    'Nav array standing by. Select [1-4].',
+  ];
+
+  function utcNow() {
+    return new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
+  }
+
+  function stampSession() {
+    const now = utcNow();
+    for (const node of document.querySelectorAll('[data-session-utc]')) {
+      node.textContent = now;
+      node.setAttribute('datetime', now.replace(' ', 'T').replace(' UTC', 'Z'));
+    }
+    for (const node of document.querySelectorAll('[data-station-name]')) {
+      node.textContent = 'SEL / SEOUL RX';
+    }
+  }
+
+  function renderLog() {
+    if (!telemetryLog) return;
+    telemetryLog.replaceChildren();
+    for (const line of logLines) {
+      const item = document.createElement('li');
+      item.textContent = line;
+      telemetryLog.append(item);
+    }
+  }
+
+  function appendLog(message) {
+    const stamp = utcNow().slice(11, 19);
+    const line = `${stamp}  ${message}`;
+    logLines.push(line);
+    while (logLines.length > 4) logLines.shift();
+    if (!telemetryLog) return;
+    const item = document.createElement('li');
+    item.textContent = line;
+    telemetryLog.append(item);
+    while (telemetryLog.children.length > 4) {
+      const oldest = telemetryLog.firstElementChild || telemetryLog.children[0];
+      if (oldest?.remove) oldest.remove();
+      else if (oldest && telemetryLog.removeChild) telemetryLog.removeChild(oldest);
+      else break;
+    }
+  }
+
+  /* Deterministic 32-bit coordinate hash + smooth 2D FBM for sculpted nebulae. */
+  function hash2(col, row, seed = 17) {
+    let h = Math.imul(col + 31, 374761393) ^ Math.imul(row + 19, 668265263) ^ Math.imul(seed, 1442695041);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  function valueNoise(x, y, seed) {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    let fx = x - ix;
+    let fy = y - iy;
+    fx = fx * fx * (3 - 2 * fx);
+    fy = fy * fy * (3 - 2 * fy);
+    const a = hash2(ix, iy, seed);
+    const b = hash2(ix + 1, iy, seed);
+    const c = hash2(ix, iy + 1, seed);
+    const d = hash2(ix + 1, iy + 1, seed);
+    return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+  }
+
+  function fbm(x, y, seed) {
+    return (
+      valueNoise(x, y, seed) * 0.56 +
+      valueNoise(x * 2.12 + 7.3, y * 2.12 - 4.1, seed + 19) * 0.30 +
+      valueNoise(x * 4.35 - 3.7, y * 4.35 + 11.2, seed + 47) * 0.14
+    );
+  }
+
+  function makeGrid(cols, rows) {
+    return Array.from({ length: rows }, () => Array(cols).fill(' '));
+  }
+
+  function clearGrid(grid) {
+    for (let r = 0; r < grid.length; r++) grid[r].fill(' ');
+  }
+
+  function put(grid, col, row, ch) {
+    if (row >= 0 && row < grid.length && col >= 0 && col < grid[0].length) {
+      grid[row][col] = ch;
+    }
+  }
+
+  function writeText(grid, col, row, text) {
+    for (let i = 0; i < text.length; i++) put(grid, col + i, row, text[i]);
+  }
+
+  function toText(grid) {
+    return grid.map(row => row.join('')).join('\n');
+  }
+
+  function labelClearRect(entry, spec, tight = false) {
+    const pos = entry[spec.key];
+    const span = spec.key === 'wide' ? 24 : 20;
+    const padY = tight ? 0 : 1;
+    if (entry.labelSide === 'right') {
+      return { left: pos.col - 3, right: pos.col + span, top: pos.row - padY, bottom: pos.row + padY };
+    }
+    return { left: pos.col - span, right: pos.col + 3, top: pos.row - padY, bottom: pos.row + padY };
+  }
+
+  function insideBeaconClearance(col, row, spec, includeTag = true, tight = false) {
+    for (const entry of CATALOG) {
+      const pos = entry[spec.key];
+      if (Math.abs(col - pos.col) <= 2 && Math.abs(row - pos.row) <= 1) return true;
+      if (includeTag) {
+        const rect = labelClearRect(entry, spec, tight);
+        if (col >= rect.left && col <= rect.right && row >= rect.top && row <= rect.bottom) return true;
+      }
+    }
+    return false;
+  }
+
+  function insideWaypointClearance(col, row, spec) {
+    const list = spec.key === 'wide' ? WAYPOINTS_WIDE : WAYPOINTS_NARROW;
+    for (const wp of list) {
+      const tagLen = wp.tag ? wp.tag.length + (wp.cross ? 5 : 3) : 2;
+      if (Math.abs(row - wp.row) <= (wp.cross ? 1 : 0) && col >= wp.col - (wp.cross ? 3 : 1) && col <= wp.col + tagLen) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function insideFrameStamp(col, row, spec) {
+    if (row === 1 || row === spec.rows - 2) {
+      const pad = spec.key === 'wide' ? 18 : 6;
+      if (col <= pad || col >= spec.cols - pad - 1) return true;
+      const qx = [1, 2, 3].map(n => (n * (spec.cols - 1)) / 4);
+      if (qx.some(q => Math.abs(col - q) <= (spec.key === 'wide' ? 7 : 3))) return true;
+    }
+    if (spec.key === 'wide') {
+      const qy = [1, 2, 3].map(n => (n * (spec.rows - 1)) / 4);
+      if (qy.includes(row) && (col <= 9 || col >= spec.cols - 10)) return true;
+    }
+    return false;
+  }
+
+  function traceLineCells(x0, y0, x1, y1) {
+    const cells = [];
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    let x = x0;
+    let y = y0;
+    while (true) {
+      cells.push({ col: x, row: y });
+      if (x === x1 && y === y1) break;
+      const e2 = err * 2;
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx) { err += dx; y += sy; }
+    }
+    return cells;
+  }
+
+  function drawLine(grid, x0, y0, x1, y1, spec, sparse, collector = null) {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    const cells = traceLineCells(x0, y0, x1, y1);
+    const steps = cells.length - 1;
+    const slope = dx === 0 ? 99 : dy / dx;
+    const dirChar = slope < 0.28 ? '\u2500' : slope > 2.2 ? '\u2502' : (sx * sy > 0 ? '\u2572' : '\u2571');
+
+    for (let step = 0; step < cells.length; step++) {
+      const { col: x, row: y } = cells[step];
+      if (step >= 3 && step <= steps - 3 && !insideBeaconClearance(x, y, spec, true, true)) {
+        if (collector) collector.push({ col: x, row: y, dir: dirChar });
+        let ch = null;
+        if (sparse) {
+          if (step % 3 === 0) ch = '\u00b7';
+        } else if (step % 2 === 0) {
+          ch = dirChar;
+        } else if (step % 4 === 1) {
+          ch = '\u00b7';
+        }
+        if (ch && grid[y][x] === ' ') put(grid, x, y, ch);
+      }
+    }
+  }
+
+  function drawGraticule(spec) {
+    const { cols, rows } = spec;
+    const grid = makeGrid(cols, rows);
+    const qx = [1, 2, 3].map(n => (n * (cols - 1)) / 4);
+    const qy = [1, 2, 3].map(n => (n * (rows - 1)) / 4);
+    const qxSet = new Set(qx);
+    const qySet = new Set(qy);
+    const minorX = spec.key === 'wide' ? new Set([15, 45, 75, 105]) : new Set();
+    const cx = (cols - 1) / 2;
+    const cy = (rows - 1) / 2;
+
+    // Outer box-drawing frame with major & minor RA / DEC graduations.
+    for (let c = 0; c < cols; c++) {
+      const topCh = c === 0 ? '\u250c' : c === cols - 1 ? '\u2510' : qxSet.has(c) ? '\u252c' : minorX.has(c) ? '\u2577' : '\u2500';
+      const botCh = c === 0 ? '\u2514' : c === cols - 1 ? '\u2518' : qxSet.has(c) ? '\u2534' : minorX.has(c) ? '\u2575' : '\u2500';
+      put(grid, c, 0, topCh);
+      put(grid, c, rows - 1, botCh);
+    }
+    for (let r = 1; r < rows - 1; r++) {
+      put(grid, 0, r, qySet.has(r) ? '\u251c' : '\u2502');
+      put(grid, cols - 1, r, qySet.has(r) ? '\u2524' : '\u2502');
+    }
+
+    // Interior dotted meridians & declination parallels.
+    for (const c of qx) {
+      for (let r = 1; r < rows - 1; r++) {
+        if (r % 2 === 0) put(grid, c, r, '\u2506');
+      }
+    }
+    for (const r of qy) {
+      for (let c = 1; c < cols - 1; c++) {
+        if (c % 2 === 0) put(grid, c, r, '\u2504');
+      }
+    }
+    for (const c of qx) {
+      for (const r of qy) put(grid, c, r, '\u253c');
+    }
+
+    // Concentric aspect-corrected astrolabe range rings around sector center.
+    const rings = spec.key === 'wide'
+      ? [{ rx: 46, ry: 16.5, step: 144 }, { rx: 28, ry: 10.2, step: 96 }, { rx: 13, ry: 4.8, step: 52 }]
+      : [{ rx: 22, ry: 9.2, step: 84 }, { rx: 12, ry: 5.0, step: 48 }];
+    for (const ring of rings) {
+      for (let i = 0; i < ring.step; i++) {
+        const angle = (i / ring.step) * Math.PI * 2;
+        const c = Math.round(cx + Math.cos(angle) * ring.rx);
+        const r = Math.round(cy + Math.sin(angle) * ring.ry);
+        if (c > 1 && c < cols - 2 && r > 1 && r < rows - 2 && grid[r][c] === ' ') {
+          put(grid, c, r, '\u00b7');
+        }
+      }
+    }
+
+    // Subtle sinusoidal ecliptic plane curve sweeping across the sky.
+    const eclipticStep = spec.key === 'wide' ? 3 : 2;
+    for (let c = 2; c < cols - 2; c += eclipticStep) {
+      const phase = (c / (cols - 1)) * Math.PI * 2 - 0.55;
+      const r = Math.round(cy - Math.sin(phase) * (rows * 0.22));
+      if (r > 2 && r < rows - 3 && grid[r][c] === ' ' && !insideBeaconClearance(c, r, spec, true)) {
+        put(grid, c, r, '\u00b7');
+      }
+    }
+
+    // Corner sector designators & graduated coordinate labels.
+    if (spec.key === 'wide') {
+      writeText(grid, 2, 1, 'SEC-A1 // N-GAL');
+      writeText(grid, qx[0] - 1, 1, '06h');
+      writeText(grid, qx[1] - 1, 1, '12h');
+      writeText(grid, qx[2] - 1, 1, '18h');
+      writeText(grid, cols - 15, 1, 'SEC-B2 // CYG');
+      writeText(grid, 2, qy[0], '+30\u00b0');
+      writeText(grid, cols - 6, qy[0], '+30\u00b0');
+      writeText(grid, 2, cy, 'EQ 00\u00b0');
+      writeText(grid, cols - 8, cy, 'EQ 00\u00b0');
+      writeText(grid, 2, qy[2], '-30\u00b0');
+      writeText(grid, cols - 6, qy[2], '-30\u00b0');
+      writeText(grid, 2, rows - 2, 'SEC-C3 // VELA');
+      writeText(grid, qx[1] - 6, rows - 2, 'EPOCH J2000.0');
+      writeText(grid, cols - 15, rows - 2, 'SEC-D4 // CAR');
+    } else {
+      writeText(grid, 2, 1, 'A1');
+      writeText(grid, cx - 1, 1, '12h');
+      writeText(grid, cols - 4, 1, 'B2');
+      writeText(grid, 2, cy, 'EQ0');
+      writeText(grid, 2, rows - 2, 'C3');
+      writeText(grid, cx - 2, rows - 2, 'J2000');
+      writeText(grid, cols - 4, rows - 2, 'D4');
+    }
+
+    return grid;
+  }
+
+  /* Procedural two-tone galactic nebula & star-forming clouds:
+     cool ionized teal-cyan outer arm + warm terracotta-copper H-II knots
+     with a carved central dark dust rift. */
+  function drawNebulae(spec, graticule) {
+    const { cols, rows } = spec;
+    const cool = makeGrid(cols, rows);
+    const warm = makeGrid(cols, rows);
+    const cx = (cols - 1) / 2;
+    const cy = (rows - 1) / 2;
+    const isWide = spec.key === 'wide';
+
+    for (let r = 2; r < rows - 2; r++) {
+      for (let c = 2; c < cols - 2; c++) {
+        if (graticule[r][c] !== ' ') continue;
+        if (insideBeaconClearance(c, r, spec, true) || insideWaypointClearance(c, r, spec) || insideFrameStamp(c, r, spec)) continue;
+
+        const nx = c / (cols - 1);
+        const ny = r / (rows - 1);
+        // Normalized aspect-corrected coordinates centered on chart.
+        const ax = (c - cx) / (cols * 0.42);
+        const ay = (r - cy) / (rows * 0.42);
+
+        // Diagonal galactic plane sweeping lower-left -> upper-right with gentle S-warp.
+        const warp = (fbm(nx * 3.8 + 1.4, ny * 3.4 - 0.7, 73) - 0.5) * 0.28;
+        const planeY = 0.84 - 0.68 * nx + warp;
+        const planeDist = Math.abs(ny - planeY);
+
+        // Dark central Great Rift dust lane carved through the Milky Way spine.
+        const riftNoise = fbm(nx * 7.2 + 4.1, ny * 6.5 + 2.2, 131);
+        const rift = Math.exp(-Math.pow((ny - planeY + (riftNoise - 0.5) * 0.05) / 0.036, 2)) * 0.72;
+
+        const detail = fbm(nx * 9.5 + 3.2, ny * 8.2 - 1.9, 211);
+        const arm = Math.exp(-Math.pow(planeDist / 0.175, 2)) * Math.max(0, 1 - rift);
+
+        // Localized deep-space nebula complexes (Cygnus ionized cloud + Sagittarius core + Vela/Carina knots).
+        const cygCloud = Math.exp(-(Math.pow((nx - 0.70) / 0.17, 2) + Math.pow((ny - 0.25) / 0.18, 2)));
+        const sgrCore = Math.exp(-(Math.pow((nx - 0.54) / 0.14, 2) + Math.pow((ny - 0.56) / 0.17, 2)));
+        const velaKnot = Math.exp(-(Math.pow((nx - 0.22) / 0.15, 2) + Math.pow((ny - 0.74) / 0.16, 2)));
+
+        const coolField = (arm * 0.78 + cygCloud * 0.78 + velaKnot * 0.28) * (0.45 + 0.82 * detail) - 0.35;
+        const warmField = (sgrCore * 1.05 + velaKnot * 0.68 + arm * 0.42 * Math.max(0, 1 - ax * ax * 0.45 - ay * ay * 0.45)) * (0.44 + 0.88 * riftNoise) - 0.34;
+
+        // Keep nebulae lacy and breathable using subtle stipple modulation.
+        const dither = hash2(c, r, 307);
+        const sparsity = isWide ? 0.62 : 0.54;
+
+        if (warmField > coolField && warmField > 0.06 && dither < sparsity) {
+          let ch = '\u00b7';
+          if (warmField > 0.44) ch = '\u2592';
+          else if (warmField > 0.27) ch = '\u2591';
+          else if (warmField > 0.14) ch = ':';
+          put(warm, c, r, ch);
+        } else if (coolField > 0.07 && dither < sparsity) {
+          let ch = '\u00b7';
+          if (coolField > 0.46) ch = '\u2592';
+          else if (coolField > 0.28) ch = '\u2591';
+          else if (coolField > 0.15) ch = ':';
+          put(cool, c, r, ch);
+        }
+      }
+    }
+    return { cool, warm };
+  }
+
+  function drawStarfields(spec, graticule, nebulae) {
+    const { cols, rows } = spec;
+    const cool = makeGrid(cols, rows);
+    const warm = makeGrid(cols, rows);
+    const occupied = new Set();
+    const twinklers = [];
+    const scanSparkles = [];
+    const isWide = spec.key === 'wide';
+
+    for (let r = 1; r < rows - 1; r++) {
+      for (let c = 1; c < cols - 1; c++) {
+        if (graticule[r][c] !== ' ') continue;
+        if (insideBeaconClearance(c, r, spec, true) || insideWaypointClearance(c, r, spec) || insideFrameStamp(c, r, spec)) continue;
+        if (occupied.has(`${c - 1},${r}`) || occupied.has(`${c},${r - 1}`) || occupied.has(`${c - 1},${r - 1}`)) continue;
+
+        const nx = c / (cols - 1);
+        const ny = r / (rows - 1);
+        const planeY = 0.84 - 0.68 * nx;
+        const dist = Math.abs(ny - planeY);
+        const inNebula = nebulae.cool[r][c] !== ' ' || nebulae.warm[r][c] !== ' ';
+
+        const roll = hash2(c, r, spec.cols * 7 + 13);
+        const mag = hash2(c, r, spec.rows * 11 + 91);
+        const spectral = hash2(c, r, 419);
+
+        const density = dist < 0.14 ? (isWide ? 0.15 : 0.13) : dist < 0.28 ? 0.095 : 0.058;
+        if (roll < density * (inNebula ? 0.72 : 1)) {
+          let ch = '.';
+          if (mag < 0.42) ch = '\u00b7';
+          else if (mag < 0.70) ch = '.';
+          else if (mag < 0.84) ch = ',';
+          else if (mag < 0.93) ch = '\u00b0';
+          else if (mag < 0.98) ch = '+';
+          else ch = '*';
+
+          // Clear underlying nebula cell so the star pops crisply without glyph collision.
+          if (nebulae.cool[r][c] !== ' ') nebulae.cool[r][c] = ' ';
+          if (nebulae.warm[r][c] !== ' ') nebulae.warm[r][c] = ' ';
+
+          const isWarm = spectral > (dist < 0.16 ? 0.54 : 0.46);
+          put(isWarm ? warm : cool, c, r, ch);
+          occupied.add(`${c},${r}`);
+
+          if (mag > 0.78) {
+            scanSparkles.push({ col: c, row: r, bright: mag > 0.93 });
+          }
+          if (mag > 0.905 && twinklers.length < (isWide ? 48 : 20)) {
+            twinklers.push({
+              col: c,
+              row: r,
+              phase: hash2(c, r, 733) * Math.PI * 2,
+              speed: 1.0 + hash2(c, r, 881) * 1.9,
+              bright: mag > 0.96,
+            });
+          }
+        }
+      }
+    }
+
+    // Iconic deep-space catalog landmarks with 3x3 ASCII diffraction crosses on wide chart.
+    const waypoints = isWide ? WAYPOINTS_WIDE : WAYPOINTS_NARROW;
+    for (const wp of waypoints) {
+      if (insideBeaconClearance(wp.col, wp.row, spec, true)) continue;
+      const target = wp.tone === 'warm' ? warm : cool;
+      if (wp.cross) {
+        for (const [dc, dr, glyph] of [
+          [0, -1, '\u00b7'], [0, 1, '\u00b7'], [-1, 0, '\u2500'], [1, 0, '\u2500'],
+        ]) {
+          const nc = wp.col + dc;
+          const nr = wp.row + dr;
+          if (!insideBeaconClearance(nc, nr, spec, true)) {
+            nebulae.cool[nr][nc] = ' ';
+            nebulae.warm[nr][nc] = ' ';
+            put(target, nc, nr, glyph);
+          }
+        }
+      }
+      nebulae.cool[wp.row][wp.col] = ' ';
+      nebulae.warm[wp.row][wp.col] = ' ';
+      put(target, wp.col, wp.row, wp.glyph);
+      twinklers.push({
+        col: wp.col,
+        row: wp.row,
+        phase: (wp.col * 0.37 + wp.row * 0.71) % (Math.PI * 2),
+        speed: 1.45,
+        bright: true,
+        cross: wp.cross,
+      });
+    }
+
+    return { cool, warm, twinklers, scanSparkles };
+  }
+
+  function drawVectors(spec) {
+    const { cols, rows } = spec;
+    const grid = makeGrid(cols, rows);
+    const spinePath = [];
+
+    for (const [fromId, toId, sparse] of ROUTES) {
+      const a = catalogById.get(fromId)[spec.key];
+      const b = catalogById.get(toId)[spec.key];
+      drawLine(grid, a.col, a.row, b.col, b.row, spec, sparse, spinePath);
+    }
+
+    const waypoints = spec.key === 'wide' ? WAYPOINTS_WIDE : WAYPOINTS_NARROW;
+    for (const [index, wp] of waypoints.entries()) {
+      if (index < 3) {
+        const root = catalogById.get(['projects', 'research', 'about'][index])[spec.key];
+        drawLine(grid, root.col, root.row, wp.col, wp.row, spec, true);
+      }
+      if (!insideBeaconClearance(wp.col, wp.row, spec, true)) {
+        const tagOffset = wp.cross ? 4 : 2;
+        if (wp.tag && wp.col + tagOffset + wp.tag.length < cols - 1) {
+          writeText(grid, wp.col + tagOffset, wp.row, wp.tag);
+        }
+      }
+    }
+    return { grid, spinePath };
+  }
+
+  function drawReticle(spec, targetId, locked) {
+    const { cols, rows } = spec;
+    const grid = makeGrid(cols, rows);
+    if (!targetId) return grid; // No amber selection or reticle at rest.
+
+    const entry = catalogById.get(targetId);
+    if (!entry) return grid;
+    const pos = entry[spec.key];
+    const tagRect = labelClearRect(entry, spec);
+
+    // Highlight directly connected constellation route edges in phosphor amber.
+    for (const [fromId, toId] of ROUTES) {
+      if (fromId !== targetId && toId !== targetId) continue;
+      const a = catalogById.get(fromId)[spec.key];
+      const b = catalogById.get(toId)[spec.key];
+      drawLine(grid, a.col, a.row, b.col, b.row, spec, !locked);
+    }
+
+    // Border vernier coordinate pointers.
+    put(grid, pos.col, 0, 'v');
+    put(grid, pos.col, rows - 1, '^');
+    put(grid, 0, pos.row, '>');
+    put(grid, cols - 1, pos.row, '<');
+
+    // Vertical & horizontal dashed phosphor-amber crosshair rails with range ticks.
+    for (let r = 1; r < rows - 1; r++) {
+      if (Math.abs(r - pos.row) < 2) continue;
+      if (r % 2 === 1 && !insideBeaconClearance(pos.col, r, spec, true)) {
+        put(grid, pos.col, r, (Math.abs(r - pos.row) % 6 === 0) ? '+' : '\u2506');
+      }
+    }
+    for (let c = 1; c < cols - 1; c++) {
+      if (Math.abs(c - pos.col) < 3) continue;
+      if (c >= tagRect.left && c <= tagRect.right) continue;
+      if (c % 2 === 0 && !insideBeaconClearance(c, pos.row, spec, true)) {
+        put(grid, c, pos.row, (Math.abs(c - pos.col) % 10 === 0) ? '+' : '\u254c');
+      }
+    }
+
+    // High-res target lock corner brackets framing the active star cell.
+    put(grid, pos.col - 2, pos.row - 1, '\u250c');
+    put(grid, pos.col + 2, pos.row - 1, '\u2510');
+    put(grid, pos.col - 2, pos.row + 1, '\u2514');
+    put(grid, pos.col + 2, pos.row + 1, '\u2518');
+    if (locked) {
+      put(grid, pos.col - 1, pos.row - 1, '\u2500');
+      put(grid, pos.col + 1, pos.row - 1, '\u2500');
+      put(grid, pos.col - 1, pos.row + 1, '\u2500');
+      put(grid, pos.col + 1, pos.row + 1, '\u2500');
+      put(grid, pos.col - 3, pos.row, '\u2500');
+      put(grid, pos.col + 3, pos.row, '\u2500');
+    }
+    return grid;
+  }
+
+  function routeRowAt(col, spec) {
+    const stops = ['projects', 'research', 'about', 'contact'].map(id => catalogById.get(id)[spec.key]);
+    if (col <= stops[0].col) {
+      const slope = (stops[1].row - stops[0].row) / Math.max(1, stops[1].col - stops[0].col);
+      return Math.max(4, Math.min(spec.rows - 4, Math.round(stops[0].row + (col - stops[0].col) * slope * 0.35)));
+    }
+    for (let i = 0; i < stops.length - 1; i++) {
+      const a = stops[i];
+      const b = stops[i + 1];
+      if (col <= b.col) {
+        const t = (col - a.col) / Math.max(1, b.col - a.col);
+        return Math.round(a.row + (b.row - a.row) * t);
+      }
+    }
+    const prev = stops[stops.length - 2];
+    const last = stops[stops.length - 1];
+    const slope = (last.row - prev.row) / Math.max(1, last.col - prev.col);
+    return Math.max(4, Math.min(spec.rows - 4, Math.round(last.row + (col - last.col) * slope * 0.35)));
+  }
+
+  function renderFxFrame(spec, elapsedMs, staticSnapshot = false) {
+    const state = animData.get(spec.key);
+    if (!state) return;
+    const { grid, twinklers, scanSparkles, spinePath, pulsar } = state;
+    const { cols, rows } = spec;
+    clearGrid(grid);
+
+    const t = elapsedMs / 1000;
+
+    // 1. Organic stellar scintillation & breathing diffraction crosses.
+    for (const star of twinklers) {
+      const wave = 0.5 + 0.5 * Math.sin(t * star.speed + star.phase);
+      if (staticSnapshot) {
+        if (star.bright) put(grid, star.col, star.row, '*');
+        continue;
+      }
+      if (wave > 0.78) {
+        put(grid, star.col, star.row, star.bright ? '*' : '+');
+        if (star.cross && wave > 0.89) {
+          put(grid, star.col - 2, star.row, '\u00b7');
+          put(grid, star.col + 2, star.row, '\u00b7');
+        }
+      } else if (wave > 0.56 && star.bright) {
+        put(grid, star.col, star.row, '+');
+      }
+    }
+
+    if (!staticSnapshot) {
+      // 2. Live telemetry signal packets gliding along the open constellation spine.
+      if (spinePath.length > 6) {
+        for (const offset of [0, 0.52]) {
+          const head = Math.floor(((t * 0.14 + offset) % 1) * spinePath.length);
+          const p0 = spinePath[head];
+          if (p0) put(grid, p0.col, p0.row, '*');
+          const p1 = spinePath[(head - 1 + spinePath.length) % spinePath.length];
+          if (p1 && head >= 1) put(grid, p1.col, p1.row, '+');
+          const p2 = spinePath[(head - 2 + spinePath.length) % spinePath.length];
+          if (p2 && head >= 2) put(grid, p2.col, p2.row, '\u00b7');
+        }
+      }
+
+      // 3. Synchronized terminal caliper vernier + compact floating ecliptic probe.
+      // Top/bottom markers, short edge ticks, floating probe and beacon echoes all
+      // read from this single scanCol so nothing can drift out of alignment.
+      const scanPhase = (elapsedMs % SCAN_PERIOD_MS) / SCAN_PERIOD_MS;
+      const span = cols - 2;
+      const scanCol = 1 + Math.min(span - 1, Math.floor(scanPhase * span));
+      const isWide = spec.key === 'wide';
+
+      // Top & bottom border pointers + short 2-row terminal caliper ticks.
+      put(grid, scanCol, 0, 'v');
+      put(grid, scanCol, rows - 1, '^');
+      if (!insideFrameStamp(scanCol, 1, spec) && !insideBeaconClearance(scanCol, 1, spec, true)) {
+        put(grid, scanCol, 1, '\u2502');
+      }
+      if (!insideBeaconClearance(scanCol, 2, spec, true)) {
+        put(grid, scanCol, 2, '\u2506');
+      }
+      if (!insideBeaconClearance(scanCol, rows - 3, spec, true)) {
+        put(grid, scanCol, rows - 3, '\u2506');
+      }
+      if (!insideFrameStamp(scanCol, rows - 2, spec) && !insideBeaconClearance(scanCol, rows - 2, spec, true)) {
+        put(grid, scanCol, rows - 2, '\u2502');
+      }
+
+      // Compact floating terminal read-head following the Projects -> About -> Research -> Contact route.
+      const probeRow = routeRowAt(scanCol, spec);
+      const armReach = isWide ? 3 : 2;
+      for (let dr = -armReach; dr <= armReach; dr++) {
+        const r = probeRow + dr;
+        if (r <= 2 || r >= rows - 3) continue;
+        if (insideBeaconClearance(scanCol, r, spec, true, true)) continue;
+        const ch = dr === 0 ? '\u253c' : Math.abs(dr) === 1 ? '\u2502' : Math.abs(dr) === 2 ? '\u2506' : '\u00b7';
+        put(grid, scanCol, r, ch);
+      }
+      if (!insideBeaconClearance(scanCol - 1, probeRow, spec, true, true) && scanCol - 1 > 1) {
+        put(grid, scanCol - 1, probeRow, '\u2500');
+      }
+      if (!insideBeaconClearance(scanCol + 1, probeRow, spec, true, true) && scanCol + 1 < cols - 2) {
+        put(grid, scanCol + 1, probeRow, '\u2500');
+      }
+
+      // Brief phosphor star echo 0..3 columns behind the synchronized sweep.
+      for (const sp of scanSparkles) {
+        const behind = scanCol - sp.col;
+        if (behind >= 0 && behind <= 3) {
+          put(grid, sp.col, sp.row, behind <= 1 ? (sp.bright ? '*' : '+') : '\u00b7');
+        }
+      }
+
+      // Exact beacon echo when scanCol crosses each plotted portfolio star.
+      const activeSpecKey = narrowMedia.matches ? 'narrow' : 'wide';
+      if (spec.key === activeSpecKey) {
+        const pingWindow = isWide ? 4 : 2;
+        for (const link of contacts) {
+          const entry = catalogById.get(link.dataset.contact);
+          const pos = entry?.[spec.key];
+          if (!pos) continue;
+          const behind = (scanCol - pos.col + span) % span;
+          const pinged = behind >= 0 && behind <= pingWindow;
+          link.classList.toggle('is-pinged', pinged);
+          if (pinged && behind <= 2) {
+            put(grid, pos.col - 2, pos.row - 1, '\u250c');
+            put(grid, pos.col + 2, pos.row - 1, '\u2510');
+            put(grid, pos.col - 2, pos.row + 1, '\u2514');
+            put(grid, pos.col + 2, pos.row + 1, '\u2518');
+          }
+        }
+      }
+
+      // 4. Breathing galactic core pulsar ripple (SGR-A*).
+      if (pulsar) {
+        const beat = (t * 0.34) % 1;
+        if (beat < 0.24) {
+          put(grid, pulsar.col, pulsar.row, '*');
+        } else if (beat < 0.46) {
+          put(grid, pulsar.col - 2, pulsar.row, '(');
+          put(grid, pulsar.col + 2, pulsar.row, ')');
+        } else if (beat < 0.62 && spec.key === 'wide') {
+          put(grid, pulsar.col - 3, pulsar.row, '\u00b7');
+          put(grid, pulsar.col + 3, pulsar.row, '\u00b7');
+        }
+      }
+    }
+
+    const fxEl = document.getElementById(`map-fx${spec.suffix}`);
+    if (fxEl) fxEl.textContent = toText(grid);
+  }
+
+  function renderAllFx(elapsedMs, staticSnapshot = false) {
+    renderFxFrame(WIDE_SPEC, elapsedMs, staticSnapshot);
+    renderFxFrame(NARROW_SPEC, elapsedMs, staticSnapshot);
+  }
+
+  function renderStaticCharts() {
+    for (const spec of [WIDE_SPEC, NARROW_SPEC]) {
+      const graticule = drawGraticule(spec);
+      const nebulae = drawNebulae(spec, graticule);
+      const stars = drawStarfields(spec, graticule, nebulae);
+      const vectors = drawVectors(spec);
+      const waypoints = spec.key === 'wide' ? WAYPOINTS_WIDE : WAYPOINTS_NARROW;
+      const pulsar = waypoints.find(wp => wp.pulsar) || null;
+
+      animData.set(spec.key, {
+        grid: makeGrid(spec.cols, spec.rows),
+        twinklers: stars.twinklers,
+        scanSparkles: stars.scanSparkles,
+        spinePath: vectors.spinePath,
+        pulsar,
+      });
+
+      const writeLayer = (id, buf) => {
+        const el = document.getElementById(`${id}${spec.suffix}`);
+        if (el) el.textContent = toText(buf);
+      };
+      writeLayer('map-grid', graticule);
+      writeLayer('map-nebula-cool', nebulae.cool);
+      writeLayer('map-nebula-warm', nebulae.warm);
+      writeLayer('map-stars', stars.cool);
+      writeLayer('map-stars-warm', stars.warm);
+      writeLayer('map-vectors', vectors.grid);
+    }
+    renderAllFx(0, reduced.matches);
+  }
+
+  function renderReticles(targetId, locked) {
+    for (const spec of [WIDE_SPEC, NARROW_SPEC]) {
+      const reticleEl = document.getElementById(`map-reticle${spec.suffix}`);
+      if (reticleEl) reticleEl.textContent = toText(drawReticle(spec, targetId, locked));
+    }
+  }
+
+  /* High-resolution 96x44 multi-color ASCII playing-card riffle shuffle.
+     Seven color-separated <pre> layers keep card borders strictly pure ASCII
+     while shading each Jack's 13x11 suit emblem in console phosphor colors.
+     An alternating right/left in-shuffle restores the hand after four cycles. */
+  const JACK_ORDERS = [
+    [0, 1, 2, 3], [2, 0, 3, 1], [3, 2, 1, 0], [1, 3, 0, 2],
+  ];
+  const JACK_COLS = 96, JACK_ROWS = 44;
+  const JACK_CARD_W = 31, JACK_CARD_H = 25;
+  const JACK_LAYER_NAMES = ['back', 'mid', 'front', 'gold', 'cool', 'warm', 'mint'];
+  const jackLayerEls = Object.fromEntries(
+    JACK_LAYER_NAMES.map(name => [name, document.getElementById(`jack-${name}`)])
+  );
+  const hasJackLayers = Boolean(jackLayerEls.back && jackLayerEls.front);
+  const JACK_SUITS = ['\u2663', '\u2666', '\u2665', '\u2660'];
+  const JACK_SUIT_COLORS = [
+    { outline: 'mint', shade: 'back', pip: 'mint' },   // 0: Clubs
+    { outline: 'gold', shade: 'warm', pip: 'gold' },   // 1: Diamonds
+    { outline: 'warm', shade: 'gold', pip: 'warm' },   // 2: Hearts
+    { outline: 'cool', shade: 'mint', pip: 'cool' },   // 3: Spades
+  ];
+  // High-resolution 13x11 shaded emblems, each centered on column 6 with one matching pip.
+  const JACK_EMBLEMS = [
+    [
+      '    .---.    ',
+      '   / ::: \\   ',
+      '  ( ::::: )  ',
+      ' .--\\ : /--. ',
+      '/ :: \':\' :: \\',
+      '( ::::\u2663:::: )',
+      ' \\__ ::: __/ ',
+      '    \\ : /    ',
+      '     | |     ',
+      '    / : \\    ',
+      '   /_____\\   ',
+    ],
+    [
+      '      ^      ',
+      '     / \\     ',
+      '    / . \\    ',
+      '   / / \\ \\   ',
+      '  / / : \\ \\  ',
+      ' < < :\u2666: > > ',
+      '  \\ \\ : / /  ',
+      '   \\ \\ / /   ',
+      '    \\ \' /    ',
+      '     \\ /     ',
+      '      v      ',
+    ],
+    [
+      ' .--.   .--. ',
+      '/ :: \\_/ :: \\',
+      '| ::::::::: |',
+      '| ::::\u2665:::: |',
+      '\\ ::::::::: /',
+      ' \\ ::::::: / ',
+      '  \\ ::::: /  ',
+      '   \\ ::: /   ',
+      '    \\ : /    ',
+      '     \\ /     ',
+      '      V      ',
+    ],
+    [
+      '      ^      ',
+      '     / \\     ',
+      '    / . \\    ',
+      '   / ::: \\   ',
+      '  / ::::: \\  ',
+      ' / :::\u2660::: \\ ',
+      '( :::: :::: )',
+      ' \\___   ___/ ',
+      '     | |     ',
+      '    / : \\    ',
+      '   /_____\\   ',
+    ],
+  ];
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  const mix = (a, b, t) => a + (b - a) * t;
+  // Palm-pivoted fan (\ \ / /): top corners spread cleanly while bases converge.
+  const fanPose = slot => ({
+    x: [21, 28, 35, 42][slot],
+    y: [11, 8, 8, 11][slot],
+    lean: [8.5, 4.2, -4.2, -8.5][slot],
+    flex: 0,
+  });
+  const squarePose = slot => ({
+    x: 32,
+    y: 12 - slot * 0.9,
+    lean: 0,
+    flex: 0,
+  });
+  const packetPose = slot => ({
+    x: slot < 2 ? 5 + slot * 1.5 : 60 - (slot - 2) * 1.5,
+    y: 13 - (slot % 2) * 2.2,
+    lean: slot < 2 ? -4.5 : 4.5,
+    flex: 0,
+  });
+  function blendJackPose(from, to, progress) {
+    const t = clamp01(progress);
+    const u = 0.25 * t + 0.75 * t * t * (3 - 2 * t);
+    return Object.fromEntries(['x', 'y', 'lean', 'flex'].map(key => [key, mix(from[key], to[key], u)]));
+  }
+
+  function makeJackBufs() {
+    return Object.fromEntries(
+      JACK_LAYER_NAMES.map(name => [name, Array.from({ length: JACK_ROWS }, () => Array(JACK_COLS).fill(' '))])
+    );
+  }
+
+  function drawJackFace(bufs, id, pose, depth = 3, isFront = true) {
+    const width = JACK_CARD_W, height = JACK_CARD_H;
+    const suit = JACK_SUITS[id];
+    const palette = JACK_SUIT_COLORS[id];
+    const frameLayer = depth >= 3 ? 'front' : depth >= 2 ? 'mid' : 'back';
+    const rankLayer = isFront ? 'gold' : depth >= 2 ? 'front' : 'mid';
+    const railLayer = isFront ? 'mid' : 'back';
+    const crownLayer = isFront ? 'gold' : 'back';
+    const shift = row => Math.round(
+      pose.lean * (row / (height - 1) - 0.5)
+      + pose.flex * Math.sin(Math.PI * row / (height - 1))
+    );
+    const slope = row => pose.lean / (height - 1)
+      + pose.flex * (Math.PI / (height - 1)) * Math.cos(Math.PI * row / (height - 1));
+    const left = row => Math.round(pose.x) + shift(row);
+    const top = Math.round(pose.y);
+    const put = (layer, x, y, glyph) => {
+      if (y >= 0 && y < JACK_ROWS && x >= 0 && x < JACK_COLS) bufs[layer][y][x] = glyph;
+    };
+    const write = (layer, x, y, text) => {
+      for (let i = 0; i < text.length; i++) put(layer, x + i, y, text[i]);
+    };
+
+    for (let row = 0; row < height; row++) {
+      const x = left(row), y = top + row;
+      // Opaque clear across all seven color layers before painting this card.
+      if (y >= 0 && y < JACK_ROWS) {
+        for (let col = 0; col < width; col++) {
+          const cx = x + col;
+          if (cx >= 0 && cx < JACK_COLS) {
+            for (const name of JACK_LAYER_NAMES) bufs[name][y][cx] = ' ';
+          }
+        }
+      }
+      if (row === 0 || row === height - 1) {
+        const corner = row === 0 ? '.' : "'";
+        for (let col = 1; col < width - 1; col++) put(frameLayer, x + col, y, '-');
+        put(frameLayer, x, y, corner);
+        put(frameLayer, x + width - 1, y, corner);
+      } else {
+        const s = slope(row);
+        const edge = s > 0.14 ? '\\' : s < -0.14 ? '/' : '|';
+        put(frameLayer, x, y, edge);
+        put(frameLayer, x + width - 1, y, edge);
+      }
+      if (row === 1) {
+        put(rankLayer, x + 2, y, 'J');
+        put(palette.pip, x + 3, y, suit);
+      }
+      if (row === 3 || row === 21) {
+        write(railLayer, x + 11, y, '\u00b7-------\u00b7');
+      }
+      if (row === 4) {
+        write(crownLayer, x + 11, y, '/\\  ^  /\\');
+      }
+      if (row >= 7 && row <= 17) {
+        const line = JACK_EMBLEMS[id][row - 7];
+        [...line].forEach((glyph, col) => {
+          if (glyph === ' ') return;
+          const layer = glyph === suit
+            ? palette.pip
+            : (glyph === ':' || glyph === '.' || glyph === "'")
+              ? palette.shade
+              : palette.outline;
+          put(layer, x + 9 + col, y, glyph);
+        });
+      }
+      if (row === 20) {
+        write(crownLayer, x + 11, y, '\\/  v  \\/');
+      }
+      if (row === 23) {
+        put(palette.pip, x + 27, y, suit);
+        put(rankLayer, x + 28, y, 'J');
+      }
+    }
+  }
+
+  function renderJackShuffle(elapsedMs, staticSnapshot = false) {
+    if (!hasJackLayers) return;
+    const t = staticSnapshot ? 0 : elapsedMs;
+    const cycle = Math.floor(t / SHUFFLE_CYCLE_MS) % JACK_ORDERS.length;
+    const p = (t % SHUFFLE_CYCLE_MS) / SHUFFLE_CYCLE_MS;
+    const order = JACK_ORDERS[cycle];
+    const nextSlots = [1, 3, 0, 2];
+    const releases = [2, 0, 3, 1];
+    const faces = order.map((id, slot) => {
+      const next = nextSlots[slot];
+      let pose, depth = 10 + slot;
+      if (p < 0.15) {
+        pose = blendJackPose(fanPose(slot), squarePose(slot), p / 0.15);
+      } else if (p < 0.31) {
+        pose = blendJackPose(squarePose(slot), packetPose(slot), (p - 0.15) / 0.16);
+      } else if (p < 0.76) {
+        const start = 0.31 + releases.indexOf(slot) * 0.075;
+        const u = clamp01((p - start) / 0.22);
+        pose = blendJackPose(packetPose(slot), squarePose(next), u);
+        const lift = Math.sin(Math.PI * u);
+        pose.y -= (6.2 + (slot >= 2 ? 0.8 : 0)) * lift;
+        pose.flex += (slot < 2 ? 4.4 : -4.4) * lift;
+        pose.lean += (slot < 2 ? 5.6 : -5.6) * lift;
+        if (p >= start) depth = next;
+      } else if (p < 0.83) {
+        const u = clamp01((p - 0.76) / 0.07);
+        pose = { ...squarePose(next), y: squarePose(next).y + Math.sin(Math.PI * u) * 1.2 };
+        depth = next;
+      } else {
+        pose = blendJackPose(squarePose(next), fanPose(next), (p - 0.83) / 0.17);
+        depth = next;
+      }
+      return { id, pose, depth };
+    });
+
+    const bufs = makeJackBufs();
+    faces.sort((a, b) => a.depth - b.depth);
+    faces.forEach((face, idx) => drawJackFace(bufs, face.id, face.pose, idx, idx === faces.length - 1));
+
+    // Subtle open-air phosphor riffle sparks during the active bridge weave.
+    if (!staticSnapshot && p >= 0.34 && p < 0.74) {
+      const isEmpty = (c, r) => JACK_LAYER_NAMES.every(name => bufs[name][r]?.[c] === ' ');
+      const step = Math.floor((p - 0.34) * 40);
+      for (const [c, r, ch] of [
+        [47 + (step % 3) - 1, 2 + (step % 4), step % 2 === 0 ? '\u00b7' : ':'],
+        [48 - (step % 3), 39 + (step % 3), '\u00b7'],
+      ]) {
+        if (isEmpty(c, r)) bufs.gold[r][c] = ch;
+      }
+    }
+
+    for (const name of JACK_LAYER_NAMES) {
+      const el = jackLayerEls[name];
+      if (!el) continue;
+      const text = bufs[name].map(row => row.join('')).join('\n');
+      if (el.textContent !== text) el.textContent = text;
+    }
+  }
+
+  function shouldAnimateFx() {
+    return chart.dataset.sweep === 'running' && !sections.has(routeId());
+  }
+
+  function shouldAnimateShuffle() {
+    return hasJackLayers && routeId() === 'about' && !reduced.matches && !document.hidden && !departed;
+  }
+
+  function shouldRunLoop() {
+    return shouldAnimateFx() || shouldAnimateShuffle();
+  }
+
+  function stopFxLoop() {
+    if (fxFrame) {
+      cancelAnimationFrame(fxFrame);
+      fxFrame = 0;
+    }
+    lastFrameNow = null;
+  }
+
+  function tickFx(now) {
+    fxFrame = 0;
+    if (!shouldRunLoop()) {
+      lastFrameNow = null;
+      return;
+    }
+    const dt = lastFrameNow !== null ? Math.min(250, Math.max(0, now - lastFrameNow)) : 0;
+    lastFrameNow = now;
+    if (shouldAnimateFx()) {
+      animElapsedMs += dt;
+      if (now - lastPaintMs >= FX_STEP_MS) {
+        lastPaintMs = now;
+        const activeSpec = narrowMedia.matches ? NARROW_SPEC : WIDE_SPEC;
+        renderFxFrame(activeSpec, animElapsedMs, false);
+      }
+    }
+    if (shouldAnimateShuffle()) {
+      shuffleElapsedMs += dt;
+      renderJackShuffle(shuffleElapsedMs, false);
+    }
+    fxFrame = requestAnimationFrame(tickFx);
+  }
+
+  function syncFxLoop() {
+    if (reduced.matches) {
+      stopFxLoop();
+      for (const link of contacts) link.classList.remove('is-pinged');
+      renderAllFx(0, true);
+      shuffleElapsedMs = 0;
+      renderJackShuffle(0, true);
+      return;
+    }
+    if (shouldRunLoop()) {
+      if (!fxFrame) {
+        lastFrameNow = null;
+        fxFrame = requestAnimationFrame(tickFx);
+      }
+    } else {
+      stopFxLoop();
+    }
+  }
+
+  function reflectInspector() {
+    const activeRoute = sections.has(routeId()) ? routeId() : null;
+    const previewId = inputMode === 'keyboard' ? keyboardId : pointerId;
+    const focusId = previewId || activeRoute;
+    const entry = focusId ? catalogById.get(focusId) : null;
+    const locked = Boolean(activeRoute && (!previewId || previewId === activeRoute));
+
+    chart.classList.toggle('has-lock', locked);
+    chart.classList.toggle('has-tracking', Boolean(focusId && !locked));
+    renderReticles(focusId, locked);
+
+    for (const link of contacts) {
+      link.classList.toggle('is-preview', Boolean(previewId && link.dataset.contact === previewId));
+    }
+    for (const link of navLinks) {
+      link.classList.toggle('is-preview', Boolean(previewId && link.dataset.nav === previewId));
+    }
+
+    if (!entry) {
+      if (inspectorPrompt) inspectorPrompt.textContent = '> SELECT BEACON OR INDEX [1-4]';
+      if (inspectorSummary) inspectorSummary.textContent = 'Vectors calibrated. Pick a star on the chart or index to open a portfolio record.';
+      if (cursorReadout) cursorReadout.textContent = 'LOCK: STANDBY // 04 CONTACTS';
+      if (inspTarget) inspTarget.textContent = 'SECTOR 04 / STANDBY';
+      if (inspCoords) inspCoords.textContent = 'RA 12h00m / DEC +00\u00b000\'';
+      if (inspClass) inspClass.textContent = 'ECLIPTIC SURVEY';
+      if (inspStatus) {
+        inspStatus.textContent = 'AWAITING LOCK';
+        inspStatus.classList.add('quiet-state');
+        inspStatus.classList.remove('signal-state');
+      }
+      return;
+    }
+
+    if (inspectorPrompt) inspectorPrompt.textContent = locked ? '> RECORD OPEN // ESC RETURNS TO CHART' : '> RECORD PREVIEW';
+    if (inspectorSummary) {
+      const summary = document.getElementById(entry.id)?.querySelector('.record-body');
+      inspectorSummary.textContent = summary?.textContent.trim() || '';
+    }
+    if (cursorReadout) {
+      cursorReadout.textContent = `${locked ? 'LOCKED' : 'TRACK'}: ${entry.code}/${entry.label.toUpperCase()} // ${entry.coords}`;
+    }
+    if (inspTarget) inspTarget.textContent = entry.designation;
+    if (inspCoords) inspCoords.textContent = entry.coords;
+    if (inspClass) inspClass.textContent = entry.spectral;
+    if (inspStatus) {
+      inspStatus.textContent = locked ? 'SIGNAL LOCKED' : 'TRACKING TARGET';
+      inspStatus.classList.add('signal-state');
+      inspStatus.classList.remove('quiet-state');
+    }
+  }
+
+  function reflectSweep() {
+    const state = reduced.matches ? 'reduced' : document.hidden || departed ? 'hidden' : held ? 'held' : 'running';
+    chart.dataset.sweep = state;
+    const label = reduced.matches ? 'Scan static: reduced motion' : held ? 'Resume scan' : 'Hold scan';
+    if (scanState) {
+      scanState.textContent = state === 'reduced' ? 'SCAN STATIC' : state === 'hidden' ? 'SCAN PAUSED' : state === 'held' ? 'SCAN HELD' : 'SCAN RUNNING';
+    }
+    toggle.disabled = reduced.matches;
+    toggle.setAttribute('aria-pressed', String(held));
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', label + ' (H)');
+    const glyph = toggle.querySelector?.('.btn-glyph');
+    const text = toggle.querySelector?.('.btn-label');
+    if (glyph) glyph.replaceChildren(held ? '\u25b7' : '\u2161');
+    if (text) text.replaceChildren(held ? 'RESUME SCAN' : 'HOLD SCAN');
+    syncFxLoop();
+  }
+
+  function reflectRoute(focus = false) {
+    const route = routeId();
+    const selected = contacts.find(link => link.dataset.contact === route) || null;
+    const selectedNav = navLinks.find(link => link.dataset.nav === route) || null;
+
+    contacts.forEach(link => {
+      if (link === selected) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+    navLinks.forEach(link => {
+      if (link === selectedNav) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+
+    pointerId = null;
+    keyboardId = null;
+
+    document.title = selected
+      ? 'Yeon Jun Kim // ' + route[0].toUpperCase() + route.slice(1)
+      : 'Yeon Jun Kim // Star Chart';
+
+    if (selected) {
+      const matchedOrigin = lastActivated && (lastActivated.dataset.contact === route || lastActivated.dataset.nav === route)
+        ? lastActivated
+        : selected;
+      returnTarget = matchedOrigin;
+      lastActivated = null;
+      if (currentRoute !== route) {
+        const entry = catalogById.get(route);
+        appendLog(`LOCK ACQUIRED -> ${entry.label.toUpperCase()} [${entry.code}]`);
+      }
+      currentRoute = route;
+      if (focus) document.getElementById(route)?.focus({ preventScroll: !compact.matches });
+    } else {
+      if (currentRoute && sections.has(currentRoute)) {
+        appendLog('LOCK RELEASED -> CHART STANDBY.');
+      }
+      currentRoute = '';
+      if (focus && returnTarget) {
+        returnTarget.focus({ preventScroll: !compact.matches });
+      }
+    }
+    reflectInspector();
+    syncFxLoop();
+  }
+
+  function toggleSweep() {
+    if (!reduced.matches) {
+      held = !held;
+      reflectSweep();
+      appendLog(held ? 'SCAN HOLD ENGAGED.' : 'SCAN SWEEP RESUMED.');
+    }
+  }
+
+  // Pointer hover and keyboard focus own separate tracking channels. A mouse
+  // click's retained focus cannot leave a phantom tracking box after it exits.
+  document.addEventListener('pointerdown', () => { inputMode = 'pointer'; keyboardId = null; reflectInspector(); });
+  function bindTargetEvents(list, attr) {
+    for (const link of list) {
+      const id = link.dataset[attr];
+      link.addEventListener('pointerenter', event => {
+        if (event.pointerType === 'touch') return;
+        inputMode = 'pointer';
+        pointerId = id;
+        reflectInspector();
+      });
+      link.addEventListener('pointermove', event => {
+        if (event.pointerType === 'touch' || (inputMode === 'pointer' && pointerId === id)) return;
+        inputMode = 'pointer';
+        pointerId = id;
+        reflectInspector();
+      });
+      link.addEventListener('pointerleave', event => {
+        if (event.pointerType === 'touch') return;
+        if (pointerId === id) { pointerId = null; reflectInspector(); }
+      });
+      link.addEventListener('focus', () => {
+        if (inputMode === 'keyboard') { keyboardId = id; reflectInspector(); }
+      });
+      link.addEventListener('blur', () => {
+        if (keyboardId === id) { keyboardId = null; reflectInspector(); }
+      });
+      link.addEventListener('click', () => { lastActivated = link; });
+    }
+  }
+
+  bindTargetEvents(contacts, 'contact');
+  bindTargetEvents(navLinks, 'nav');
+
+  toggle.hidden = false;
+  toggle.addEventListener('click', toggleSweep);
+  window.addEventListener('hashchange', () => reflectRoute(true));
+  document.addEventListener('visibilitychange', reflectSweep);
+  window.addEventListener('pagehide', () => { departed = true; reflectSweep(); });
+  window.addEventListener('pageshow', () => { departed = false; reflectSweep(); });
+  reduced.addEventListener('change', reflectSweep);
+  narrowMedia.addEventListener?.('change', () => {
+    renderAllFx(animElapsedMs, reduced.matches);
+  });
+
+  document.addEventListener('keydown', event => {
+    inputMode = 'keyboard';
+    if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const active = document.activeElement;
+    if (active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))) return;
+    const onChart = active === document.body || active === chart || active?.closest('.star-chart');
+    if (!onChart) return;
+
+    if (event.key === 'Escape' && sections.has(routeId())) {
+      event.preventDefault();
+      location.hash = 'map';
+    } else if (event.key.toLowerCase() === 'h') {
+      if (!reduced.matches) {
+        event.preventDefault();
+        toggleSweep();
+      }
+    } else if (/^[1-4]$/.test(event.key)) {
+      const entry = CATALOG[Number(event.key) - 1];
+      if (entry) {
+        event.preventDefault();
+        location.hash = entry.id;
+      }
+    } else if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(event.key) && active?.tagName !== 'BUTTON' && active !== replay && !active?.closest('.destination')) {
+      const offset = ['ArrowDown', 'ArrowRight'].includes(event.key) ? 1 : -1;
+      const inNav = navLinks.includes(active) || sections.has(routeId());
+      const pool = inNav ? navLinks : contacts;
+      const selected = pool.includes(active)
+        ? active
+        : pool.find(link => (inNav ? link.dataset.nav : link.dataset.contact) === routeId());
+      const index = selected ? pool.indexOf(selected) + offset : offset > 0 ? 0 : pool.length - 1;
+      pool[(index + pool.length) % pool.length].focus({ preventScroll: !compact.matches });
+      event.preventDefault();
+    }
+  });
+
+  // Contact owns the URLs so editing one HTML block also updates shortcuts.
+  const operatorLinks = document.getElementById('operator-links');
+  for (const channel of document.querySelectorAll('[data-contact-channel]')) {
+    const href = channel.getAttribute('href');
+    if (!href) continue;
+    const shortcut = document.createElement('a');
+    shortcut.setAttribute('class', 'op-link');
+    shortcut.setAttribute('href', href);
+    shortcut.textContent = channel.textContent;
+    operatorLinks?.append(shortcut);
+  }
+
+  stampSession();
+  renderLog();
+  renderStaticCharts();
+  renderJackShuffle(0, reduced.matches);
+  reflectRoute();
+  reflectSweep();
+})();

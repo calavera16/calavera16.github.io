@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#141716">
+    <meta name="description" content="Yeon Jun Kim (Calavera), an undergraduate at Hallym University exploring computer science, AI, embedded systems, astronomy, physics, and creative projects.">
+    <title>Yeon Jun Kim // Star Chart</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141716'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%23e3b871' stroke-width='2'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23e3b871'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="portfolio.css?v=about-contact-9">
+    <link rel="stylesheet" href="typography.css?v=site-type-1" />
+    <script defer src="portfolio.js?v=projects-1"></script>
+  </head>
+  <body>
+    <main class="star-chart" id="map" tabindex="-1" aria-label="Portfolio star chart" data-sweep="running">
+      <div class="console-shell">
+        <header class="console-band">
+          <span class="band-left"><span data-station-name>SEL / SEOUL RX</span><span class="band-mode"> // ASTROMETRIC NAV-TUI</span></span>
+          <span class="band-right"><span class="band-epoch">EPOCH J2000.0</span><span class="band-session">SESSION <time data-session-utc>--:--:-- UTC</time></span></span>
+        </header>
+        <div class="console-heading">
+          <div class="heading-group">
+            <h1 id="chart-title">Yeon Jun Kim &mdash; Portfolio</h1>
+            <span class="sector-tag">STUDENT &middot; SECTOR 04 &middot; 04 BEACONS ONLINE</span>
+          </div>
+          <span class="state-tag" id="scan-state">SCAN RUNNING</span>
+        </div>
+        <div class="workstation-grid">
+          <div class="primary-pane">
+            <fieldset class="station-panel chart-panel">
+              <legend>STAR CHART // ECLIPTIC SECTOR</legend>
+              <div class="scope-meta">
+                <span>RA 00h..24h / DEC +60&deg;..-60&deg;</span>
+                <span id="cursor-readout" class="cursor-readout">LOCK: STANDBY // 04 CONTACTS</span>
+              </div>
+              <div class="chart-viewport">
+                <div class="chart-screen">
+                  <pre id="map-grid" class="map-layer map-graticule chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-nebula-cool" class="map-layer map-nebula-cool chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-nebula-warm" class="map-layer map-nebula-warm chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-stars" class="map-layer map-stars-cool chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-stars-warm" class="map-layer map-stars-warm chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-vectors" class="map-layer map-vectors chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-fx" class="map-layer map-fx chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-reticle" class="map-layer map-reticle chart-wide" aria-hidden="true"></pre>
+                  <pre id="map-grid-narrow" class="map-layer map-graticule chart-narrow" aria-hidden="true"></pre>
+                  <pre id="map-nebula-cool-narrow" class="map-layer map-nebula-cool chart-narrow" aria-hidden="true"></pre>
+                  <pre id="map-nebula-warm-narrow" class="map-layer map-nebula-warm chart-narrow" aria-hidden="true"></pre>
+                  <pre id="map-stars-narrow" class="map-layer map-stars-cool chart-narrow" aria-hidden="true"></pre>
+                  <pre id="map-stars-warm-narrow" class="map-layer map-stars-warm chart-narrow" aria-hidden="true"></pre>
+                  <pre id="map-vectors-narrow" class="map-layer map-vectors chart-narrow" aria-hidden="true"></pre>
+                  <pre id="map-fx-narrow" class="map-layer map-fx chart-narrow" aria-hidden="true"></pre>
+                  <pre id="map-reticle-narrow" class="map-layer map-reticle chart-narrow" aria-hidden="true"></pre>
+                  <a class="star-link" data-contact="projects" href="#projects" aria-keyshortcuts="1" style="--x:17.76860%;--y:23.17073%;--x-narrow:18.42105%;--y-narrow:22.00000%"><span class="star-core" aria-hidden="true">&#9672;</span><span class="star-tag"><span class="star-code" aria-hidden="true">01</span><span class="star-name">Projects</span></span></a>
+                  <a class="star-link" data-contact="research" href="#research" aria-keyshortcuts="2" style="--x:36.77686%;--y:64.63415%;--x-narrow:35.96491%;--y-narrow:66.00000%"><span class="star-core" aria-hidden="true">*</span><span class="star-tag"><span class="star-code" aria-hidden="true">02</span><span class="star-name">Research</span></span></a>
+                  <a class="star-link" data-contact="about" href="#about" aria-keyshortcuts="3" style="--x:69.00826%;--y:37.80488%;--x-narrow:71.05263%;--y-narrow:42.00000%"><span class="star-core" aria-hidden="true">*</span><span class="star-tag"><span class="star-code" aria-hidden="true">03</span><span class="star-name">About</span></span></a>
+                  <a class="star-link" data-contact="contact" href="#contact" aria-keyshortcuts="4" style="--x:83.88430%;--y:81.70732%;--x-narrow:83.33333%;--y-narrow:86.00000%"><span class="star-core" aria-hidden="true">*</span><span class="star-tag"><span class="star-code" aria-hidden="true">04</span><span class="star-name">Contact</span></span></a>
+                </div>
+                <div class="crt-scanlines" aria-hidden="true"></div>
+                <noscript><p class="chart-noscript">JavaScript is disabled. Use the Navigation Index to open Projects, Research, About, or Contact.</p></noscript>
+              </div>
+              <div class="chart-legend" aria-hidden="true">
+                <span>&#9672; PRIMARY &nbsp;* BEACON &nbsp;&#9617; NEBULA &nbsp;+ SPECTRAL &nbsp;&#9476; ROUTE &nbsp;&#9474; SCAN</span>
+                <span>121&times;41 GRID // 1:1200 LY</span>
+              </div>
+            </fieldset>
+          <div class="dossier-panel" role="region" aria-label="Portfolio dossier">
+                <span id="work" class="route-alias" aria-hidden="true"></span>
+                <section class="destination" id="projects" aria-labelledby="projects-title" tabindex="-1">
+                  <div class="record-head">
+                    <h2 id="projects-title">Projects</h2>
+                    <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Projects and return to star chart">[ESC] Return to star chart</a>
+                  </div>
+                  <p class="record-meta">CAT // HD-01 &middot; SEC-A1 &middot; K2 III</p>
+                  <section class="project-group" aria-labelledby="hackathons-title">
+                    <h3 id="hackathons-title" class="record-body">Hackathon Participation</h3>
+                    <article class="project-card">
+                      <h4>Meta Global AI Developer Hackathon &mdash; SignalTrace</h4>
+                      <div class="project-with-media">
+                        <div class="project-description">
+                          <p>For my solo entry, I built SignalTrace to compare two ways of filtering the same pulse recording. Its plots show which measurements change when I adjust the filter.</p>
+                          <div class="link-row"><a href="https://youtu.be/FOfwBFH0nXI">Submitted demo on YouTube</a><a href="https://github.com/calavera16/SignalChase">Code on GitHub</a></div>
+                        </div>
+                        <figure class="project-media">
+                          <a class="project-media-link" href="https://cerebralvalley.ai/e/meta-ai-developer-hackathon/hackathon/gallery?q=signal+&amp;project=2223">
+                            <img src="media/signaltrace.webp" alt="SignalTrace filter sensitivity comparison and pulse waveform plots" width="1280" height="720" loading="lazy">
+                            <span class="project-media-caption">Official hackathon gallery</span>
+                          </a>
+                        </figure>
+                      </div>
+                    </article>
+                    <article class="project-card">
+                      <h4>NASA Space Apps Challenge &mdash; BioTwin Sync</h4>
+                      <div class="project-with-media">
+                        <div class="project-description">
+                          <p>What should a crew member do when a reply from Earth refers to an earlier measurement? Our team built BioTwin Sync for the NASA Space Apps Challenge to explore that problem.</p>
+                          <p>The crew and ground views show the observations behind each message. Ground can send a conditional checklist. When the reply arrives, the onboard app shows the step that fits the crew&rsquo;s latest measurements.</p>
+                          <div class="link-row"><a href="https://github.com/calavera16/BioTwin-Sync">Code and demo on GitHub</a></div>
+                        </div>
+                        <figure class="project-media">
+                          <a class="project-media-link" href="media/nasa-space-apps-certificate.pdf">
+                            <img src="media/nasa-space-apps-certificate.webp" alt="NASA Space Apps Challenge certificate of participation for Yeon Jun Kim" width="1080" height="835" loading="lazy">
+                            <span class="project-media-caption">View certificate (PDF)</span>
+                          </a>
+                        </figure>
+                      </div>
+                    </article>
+                  </section>
+                  <section class="project-group" aria-labelledby="personal-projects-title">
+                    <h3 id="personal-projects-title">Personal projects</h3>
+                    <!-- Add personal project articles here. -->
+                  </section>
+                </section>
+                <section class="destination" id="research" aria-labelledby="research-title" tabindex="-1">
+                  <div class="record-head">
+                    <h2 id="research-title">Research</h2>
+                    <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Research and return to star chart">[ESC] Return to star chart</a>
+                  </div>
+                  <p class="record-meta">CAT // HD-02 &middot; SEC-C3 &middot; B3 V</p>
+                  <ol class="research-timeline" aria-label="Research experience" role="list">
+                    <li>
+                      <p class="appointment-dates">Current</p>
+                      <div class="research-appointment">
+                        <h3>Independent Undergraduate Researcher</h3>
+                        <p class="record-body">I study artificial intelligence, biomedical engineering, and data science alongside my undergraduate coursework.</p>
+                      </div>
+                    </li>
+                    <li>
+                      <p class="appointment-dates"><time datetime="2025-07-14">July 14, 2025</time> &ndash; <time datetime="2026-08-21">August 21, 2026</time></p>
+                      <div class="research-appointment">
+                        <h3>Undergraduate Research Student</h3>
+                        <p>Cerebrovascular Disease Research Center, Hallym University</p>
+                      </div>
+                    </li>
+                  </ol>
+                  <article class="project-card research-topic" aria-labelledby="ippg-research-title">
+                    <h3 id="ippg-research-title">iPPG Research</h3>
+                    <p>Imaging photoplethysmography (iPPG) is a non invasive technique for measuring physiological signals via video recordings.</p>
+                    <section class="research-papers" id="ippg-papers" aria-labelledby="ippg-papers-title ippg-research-title">
+                      <h4 id="ippg-papers-title">Papers</h4>
+                      <ul class="research-works" aria-label="iPPG conference papers">
+                        <li id="ippg-full-frame" class="paper-entry">
+                          <div class="paper-description">
+                            <h5><cite lang="ko">영상 전체 입력 기반 iPPG 신호 처리와 딥러닝을 통한 혈압 추정</cite></h5>
+                            <span class="work-context">Korean Society of Digital Health &middot; Fall 2025 conference book &middot; pp. 153&ndash;159</span>
+                            <a href="https://www.digitalhealthkorea.or.kr/board/bbs/board.php?bo_table=schedule&amp;wr_id=13">Conference page</a>
+                          </div>
+                          <img class="paper-pipeline" src="media/paper-ippg-full-frame.png" alt="Full-frame video passes through a 2D CNN and either LSTM or BiGRU to estimate heart rate, systolic and diastolic blood pressure." width="900" height="390" loading="lazy">
+                        </li>
+                        <li id="ippg-roi" class="paper-entry">
+                          <div class="paper-description">
+                            <h5><cite>Impact of Region-of-Interest on Deep Learning Performance in Imaging Photoplethysmography-based Blood Pressure Estimation</cite></h5>
+                            <span class="work-context">6th Korea Artificial Intelligence Conference &middot; 2025 &middot; pp. 465&ndash;466</span>
+                            <div class="link-row">
+                              <a href="https://d2j16w31g89z0j.cloudfront.net/site/koreaai2025/abs/B-7-6.pdf" class="paper-link">Open paper (PDF)</a>
+                              <a href="https://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE12416387">Proceedings article on DBpia</a>
+                            </div>
+                          </div>
+                          <img class="paper-pipeline" src="media/paper-ippg-roi.png" alt="Hand, face, dual ROI and full-frame video are compared through CNN-BiGRU models to estimate systolic and diastolic blood pressure." width="900" height="390" loading="lazy">
+                        </li>
+                        <li id="ippg-heart-rate" class="paper-entry">
+                          <div class="paper-description">
+                            <h5><cite>A Distributional Learning for Robust Camera-Based iPPG Heart Rate Estimation</cite></h5>
+                            <span class="work-context">Korean Society of Digital Health &middot; Spring 2026 &middot; Oral presentation</span>
+                            <a href="https://www.digitalhealthkorea.or.kr/board/bbs/board.php?bo_table=schedule&amp;wr_id=18">Conference page</a>
+                          </div>
+                          <img class="paper-pipeline" src="media/paper-ippg-heart-rate.png" alt="Green-channel facial iPPG passes through STFT and CNN-BiGRU with attention to predict a heart-rate distribution." width="900" height="390" loading="lazy">
+                        </li>
+                      </ul>
+                    </section>
+                  </article>
+                  <article class="project-card research-topic" aria-labelledby="sleep-research-title">
+                    <h3 id="sleep-research-title">Sleep Research</h3>
+                    <p>Can a pulse recording alone distinguish sleep from wakefulness? I built two pipelines for overnight recordings from the Multi-Ethnic Study of Atherosclerosis (MESA). One keeps the raw waveform. The other summarizes it in 38 features.</p>
+                    <p>The next experiment is to compare them on participants whose recordings were held out of training.</p>
+                    <section class="research-papers" id="sleep-papers" aria-labelledby="sleep-papers-title sleep-research-title">
+                      <h4 id="sleep-papers-title">Papers</h4>
+                      <ul class="research-works" aria-label="Sleep conference papers">
+                        <li id="sleep-modalities" class="paper-entry">
+                          <div class="paper-description">
+                            <h5><cite>Sleep Staging: An EEG&ndash;ECG&ndash;PPG Modality Comparison</cite></h5>
+                            <span class="work-context">Kim, Yang, Jeong &middot; Brain Engineering Society of Korea summer conference &middot; 2026 &middot; Poster / abstract</span>
+                            <p>This study compares EEG, ECG and PPG for sleep staging using AAUWSS recordings.</p>
+                            <a href="https://besk.kr/Conference/ConferenceView.asp?AC=0&amp;CODE=CC20260501&amp;CpPage=96">Conference program</a>
+                          </div>
+                          <img class="paper-pipeline" src="media/paper-sleep-modalities.png" alt="AAUWSS EEG, ECG and PPG are compared using CNNs and feature-based models to classify wake, NREM and REM." width="900" height="390" loading="lazy">
+                        </li>
+                      </ul>
+                    </section>
+                  </article>
+                  <article class="project-card research-topic" aria-labelledby="stress-research-title">
+                    <h3 id="stress-research-title">Stress/Emotion Research</h3>
+                    <p>Can a pulse waveform distinguish positive and negative emotion in people the model hasn&rsquo;t seen? I explored that question with blood volume pulse recordings. I designed the comparison around separate groups of participants for training and testing.</p>
+                  </article>
+                  <section class="project-group research-awards" aria-labelledby="research-awards-title">
+                    <h3 id="research-awards-title">Awards</h3>
+                    <p>Recognition for coauthored conference work.</p>
+                    <ul class="award-list">
+                      <li class="project-card">
+                        <div class="project-with-media">
+                          <div class="project-description">
+                            <time datetime="2026-06-12">June 12, 2026</time>
+                            <h4>Best Oral Presentation Award &mdash; <span lang="ko">최우수상</span></h4>
+                            <p>Korean Society of Digital Health &middot; Spring conference</p>
+                            <p class="award-work">Camera-based iPPG heart-rate estimation</p>
+                          </div>
+                          <figure class="project-media">
+                            <a class="project-media-link" href="media/ksdh-2026-oral-award.pdf" aria-label="View June 12, 2026 Best Oral Presentation Award certificate (PDF)">
+                              <img src="media/ksdh-2026-oral-award.webp" alt="Korean Society of Digital Health 2026 Best Oral Presentation Award certificate" width="1200" height="849" loading="lazy">
+                              <span class="project-media-caption">View award certificate (PDF)</span>
+                            </a>
+                          </figure>
+                        </div>
+                      </li>
+                      <li class="project-card">
+                        <div class="project-with-media">
+                          <div class="project-description">
+                            <time datetime="2025-10-01">October 1, 2025</time>
+                            <h4>Best Paper Award &mdash; <span lang="ko">최우수 논문상</span></h4>
+                            <p>6th Korea Artificial Intelligence Conference &middot; KICS AI Society</p>
+                            <p class="award-work">Region of interest and iPPG blood-pressure estimation</p>
+                          </div>
+                          <figure class="project-media award-media-portrait">
+                            <a class="project-media-link" href="media/kics-2025-paper-award.pdf" aria-label="View October 1, 2025 Best Paper Award certificate (PDF)">
+                              <img src="media/kics-2025-paper-award.webp" alt="KICS AI Society 2025 Best Paper Award certificate" width="849" height="1200" loading="lazy">
+                              <span class="project-media-caption">View award certificate (PDF)</span>
+                            </a>
+                          </figure>
+                        </div>
+                      </li>
+                      <li class="project-card">
+                        <div class="project-with-media">
+                          <div class="project-description">
+                            <time datetime="2025-09-19">September 19, 2025</time>
+                            <h4>Poster Encouragement Award &mdash; <span lang="ko">장려상</span></h4>
+                            <p>Korean Society of Digital Health &middot; Fall conference</p>
+                            <p class="award-work">Full-frame iPPG blood-pressure estimation</p>
+                          </div>
+                          <figure class="project-media">
+                            <a class="project-media-link" href="media/ksdh-2025-poster-award.pdf" aria-label="View September 19, 2025 Poster Encouragement Award certificate (PDF)">
+                              <img src="media/ksdh-2025-poster-award.webp" alt="Korean Society of Digital Health 2025 Poster Encouragement Award certificate" width="1200" height="848" loading="lazy">
+                              <span class="project-media-caption">View award certificate (PDF)</span>
+                            </a>
+                          </figure>
+                        </div>
+                      </li>
+                    </ul>
+                  </section>
+                </section>
+                <section class="destination" id="about" aria-labelledby="about-title" tabindex="-1">
+                  <div class="record-head">
+                    <h2 id="about-title">About</h2>
+                    <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close About and return to star chart">[ESC] Return to star chart</a>
+                  </div>
+                  <p class="record-meta">CAT // HD-03 &middot; SEC-B2 &middot; G8 IV</p>
+                  <div class="about-lead">
+                    <div class="about-copy">
+                      <p class="record-body">CS student and generalist with a passion for exploration. Jack of all trades, master of none. Though lacking depth than a master of one, I often find myself having range letting me connect dots across disciplines. </p>
+                      <p>Recent lab work started in biomedical signal processing, which gave me a strong research foundation, but it&rsquo;s only one suit in the hand. I enjoy diving into unfamiliar topics across AI, embedded hardware, physics, and astronomy, and seeing where curiosity leads.</p>
+                    </div>
+                    <div class="jack-art">
+                      <div class="jack-stage" role="img" aria-label="Four Jack playing cards, one each of clubs, diamonds, hearts and spades, fanning and riffle shuffling in ASCII.">
+<pre id="jack-back" class="jack-layer jack-layer-back" aria-hidden="true">                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                          .----------                                                           
+                          \                                                                     
+                          \                                                                     
+                 .--------\                                                                     
+                 \         \                                                                    
+                 \         \                                                                    
+                  \        \                                                                    
+                  \        \                                                                    
+                   \       \                                                                    
+                   \       \                                                                    
+                   \        \                                                                   
+                    \       \                                                                   
+                    \       \                                                                   
+                    \       \                                                                   
+                     \      \                                                                   
+                     \       \                                                                  
+                     \       \                                                                  
+                      \      \                                                                  
+                      \      \                                                                  
+                      \      \                                                                  
+                       \     \                                                                  
+                       \      \                                                                 
+                       \      \                                                                 
+                        \     \                                                                 
+                        \     '--                                                               
+                         \                                                                      
+                         \                                                                      
+                         '------------                                                          
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                </pre>
+<pre id="jack-mid" class="jack-layer jack-layer-overlay jack-layer-mid" aria-hidden="true">                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                     .-----------------------------.                            
+                            J        /                             /                            
+                                     /                             /                            
+                                     /                                                          
+                   J                /                                                           
+                                    /                                                           
+                                    /                   ·-------·                               
+                                    /                                                           
+                                    /                                                           
+                                    /                                                           
+                                   /                                                            
+                                   /                                                            
+                                   /                                                            
+                                   /                                                            
+                                   /                                                            
+                                  /                                                             
+                                  /                                                             
+                                  /                                                             
+                                  /                                                             
+                                  /                                                             
+                                  /                                                             
+                                 /                                                              
+                                 /                                                              
+                                 /                                                              
+                                 '-----           ·-------·                                     
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                </pre>
+<pre id="jack-front" class="jack-layer jack-layer-overlay jack-layer-front" aria-hidden="true">                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                       J                                                        
+                                                                                                
+                                              .-----------------------------.                   
+                                              /                             /                   
+                                              /                             /                   
+                                             /                             /                    
+                                             /                             /                    
+                                            /                             /                     
+                                            /                             /                     
+                                            /                             /                     
+                                           /                             /                      
+                                           /                             /                      
+                                           /                             /                      
+                                          /                             /                       
+                                          /                             /                       
+                                          /                             /                       
+                                         /                             /                        
+                                         /                             /                        
+                                         /                             /                        
+                                        /                             /                         
+                                        /                             /                         
+                                        /                             /                         
+                                       /                             /                          
+                                       /                             /                          
+                                      /                             /                           
+                                      /                             /                           
+                                      '-----------------------------'                           
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                </pre>
+<pre id="jack-gold" class="jack-layer jack-layer-overlay jack-layer-gold" aria-hidden="true">                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                             ♦                                                                  
+                                                                                                
+                                                                                                
+                                                J                                               
+                                                                                                
+                                                                                                
+                                                        /\  ^  /\                               
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                  \/  v  \/                                     
+                                                                                                
+                                                                                                
+                                                                  J                             
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                </pre>
+<pre id="jack-cool" class="jack-layer jack-layer-overlay jack-layer-cool" aria-hidden="true">                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                 ♠                                              
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                           ^                                    
+                                                         / \                                    
+                                                        /   \                                   
+                                                       /     \                                  
+                                                     /       \                                  
+                                                    /    ♠    \                                 
+                                                   (           )                                
+                                                   \___   ___/                                  
+                                                       | |                                      
+                                                      /   \                                     
+                                                    /_____\                                     
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                 ♠                              
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                </pre>
+<pre id="jack-warm" class="jack-layer jack-layer-overlay jack-layer-warm" aria-hidden="true">                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                        ♥                                                       
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                </pre>
+<pre id="jack-mint" class="jack-layer jack-layer-overlay jack-layer-mint" aria-hidden="true">                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                    ♣                                                                           
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                          .                                     
+                                                         :::                                    
+                                                       :::::                                    
+                                                      ::: :::                                   
+                                                     :::: ::::                                  
+                                                                                                
+                                                                                                
+                                                        :                                       
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                
+                                                                                                </pre>
+                      </div>
+                    </div>
+                  </div>
+                  <article class="project-card about-card" aria-labelledby="about-research-title">
+                    <h3 id="about-research-title">Research &amp; technical interests</h3>
+                    <p>Topics I&rsquo;ve worked on so far, alongside wider areas in engineering and science I want to explore next.</p>
+                    <ul class="tag-list" aria-label="Research and technical interests">
+                      <li>Artificial Intelligence &amp; ML</li>
+                      <li>Computer Science</li>
+                      <li>Embedded Systems</li>
+                      <li>Signal Processing</li>
+                      <li>Biomedical Engineering</li>
+                      <li>Astronomy</li>
+                      <li>Physics</li>
+                    </ul>
+                  </article>
+                  <article class="project-card about-card" aria-labelledby="about-hobbies-title">
+                    <h3 id="about-hobbies-title">Hobbies &amp; outside interests</h3>
+                    <p>My other hobbies include making videos, skiing, playing games, and reading about space and physics.</p>
+                    <ul class="tag-list" aria-label="Hobbies and outside interests">
+                      <li>Content Creation</li>
+                      <li>Skiing</li>
+                      <li>Gaming</li>
+                      <li>Stargazing &amp; Astronomy</li>
+                      <li>Physics</li>
+                    </ul>
+                  </article>
+                </section>
+                <section class="destination" id="contact" aria-labelledby="contact-title" tabindex="-1">
+                  <div class="record-head">
+                    <h2 id="contact-title">Contact</h2>
+                    <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Contact and return to star chart">[ESC] Return to star chart</a>
+                  </div>
+                  <p class="record-meta">CAT // HD-04 &middot; SEC-D4 &middot; F5 V</p>
+                  <p class="record-body">Feel free to reach out about research ideas, hackathons, side projects, creative collaborations, or just to say hi.</p>
+                  <p>Whether you want to explore a new research topic together, team up on a build, or chat about tech, science, or hobbies, you can find me on any of the channels below.</p>
+                  <article class="project-card contact-card" aria-labelledby="contact-channels-title">
+                    <h3 id="contact-channels-title">Channels</h3>
+                    <!-- CONTACT LINKS: edit only the four href values below.
+                         Profiles: full https:// URLs. Email: mailto:you@your-domain.
+                         Leave href="" to hide a channel. Inspector shortcuts mirror these links. -->
+                    <div class="link-row" id="contact-links" aria-label="Contact channels">
+                      <a data-contact-channel="github" href="https://github.com/calavera16"><svg class="channel-icon icon-github" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.72-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.72 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.42.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.95-2.34 4.82-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.59.69.49A10.22 10.22 0 0 0 22 12.24C22 6.58 17.52 2 12 2z"/></svg>GitHub</a>
+                      <a data-contact-channel="instagram" href="https://www.instagram.com/yj_07_25"><svg class="channel-icon icon-instagram" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg>Instagram</a>
+                      <a data-contact-channel="email" href="mailto:yeonjunkim70@gmail.com"><svg class="channel-icon icon-email" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" d="M3.5 6l8.5 6.8L20.5 6"/></svg>Email</a>
+                      <a data-contact-channel="youtube" href="https://www.youtube.com/@calavera6712"><svg class="channel-icon icon-youtube" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="4" fill="none" stroke="currentColor" stroke-width="1.9"/><polygon points="10,8.8 16.2,12 10,15.2" fill="currentColor"/></svg>YouTube</a>
+                    </div>
+                    <!-- END CONTACT LINKS -->
+                    <dl class="channel-guide" aria-label="What you will find on each channel">
+                      <div><dt>GitHub</dt><dd>Code, experiments, and hackathon builds</dd></div>
+                      <div><dt>Instagram</dt><dd>Everyday updates, skiing, and hobbies</dd></div>
+                      <div><dt>Email</dt><dd>Research ideas, collaborations, and direct notes</dd></div>
+                      <div><dt>YouTube</dt><dd>Content creation, videos, and project demos</dd></div>
+                    </dl>
+                  </article>
+                </section>
+          </div>
+          </div>
+          <div class="side-stack">
+            <fieldset class="station-panel index-panel">
+              <legend>NAVIGATION INDEX</legend>
+              <nav class="sector-nav" aria-label="Portfolio directory">
+                <ol class="index-list">
+                  <li><a class="index-link" data-nav="projects" href="#projects" aria-keyshortcuts="1"><span class="idx-cursor" aria-hidden="true">&gt;</span><span class="idx-key" aria-hidden="true">[01]</span><span class="idx-label">Projects</span><span class="idx-meta">HD-01 / 04h18m</span></a></li>
+                  <li><a class="index-link" data-nav="research" href="#research" aria-keyshortcuts="2"><span class="idx-cursor" aria-hidden="true">&gt;</span><span class="idx-key" aria-hidden="true">[02]</span><span class="idx-label">Research</span><span class="idx-meta">HD-02 / 07h25m</span></a></li>
+                  <li><a class="index-link" data-nav="about" href="#about" aria-keyshortcuts="3"><span class="idx-cursor" aria-hidden="true">&gt;</span><span class="idx-key" aria-hidden="true">[03]</span><span class="idx-label">About</span><span class="idx-meta">HD-03 / 17h42m</span></a></li>
+                  <li><a class="index-link" data-nav="contact" href="#contact" aria-keyshortcuts="4"><span class="idx-cursor" aria-hidden="true">&gt;</span><span class="idx-key" aria-hidden="true">[04]</span><span class="idx-label">Contact</span><span class="idx-meta">HD-04 / 19h08m</span></a></li>
+                </ol>
+              </nav>
+            </fieldset>
+            <fieldset class="station-panel inspector-panel">
+              <legend>TARGET INSPECTOR</legend>
+              <dl class="telemetry-grid">
+                <div><dt>TARGET</dt><dd id="insp-target">SECTOR 04 / STANDBY</dd></div>
+                <div><dt>COORDS</dt><dd id="insp-coords">RA 12h00m / DEC +00&deg;00'</dd></div>
+                <div><dt>CLASS</dt><dd id="insp-class">ECLIPTIC SURVEY</dd></div>
+                <div><dt>STATUS</dt><dd id="insp-status" class="quiet-state">AWAITING LOCK</dd></div>
+              </dl>
+              <div class="inspector-records" id="inspector-records">
+                <div class="inspector-standby">
+                  <p class="standby-prompt" id="inspector-prompt">&gt; SELECT BEACON OR INDEX [1-4]</p>
+                  <p class="standby-copy" id="inspector-summary">Vectors calibrated. Pick a star on the chart or index to open a portfolio record.</p>
+                </div>
+              </div>
+              <div class="operator-links" id="operator-links" aria-label="Direct contact links"></div>
+            </fieldset>
+            <fieldset class="station-panel log-panel">
+              <legend>TELEMETRY LOG</legend>
+              <ol id="telemetry-log" class="telemetry-log" aria-live="polite">
+                <li>RX handoff complete // console linked.</li>
+                <li>Ecliptic chart calibrated // 04 beacons.</li>
+                <li>Nav array standing by. Select [1-4].</li>
+              </ol>
+            </fieldset>
+          </div>
+        </div>
+        <footer class="console-footer">
+          <div class="keybinds" aria-hidden="true">
+            <span class="key-hint"><kbd>&uarr;&darr;&larr;&rarr;</kbd> TARGET</span>
+            <span class="key-hint"><kbd>1-4</kbd> JUMP</span>
+            <span class="key-hint"><kbd>ENTER</kbd> OPEN</span>
+            <span class="key-hint"><kbd>ESC</kbd> CHART</span>
+            <span class="key-hint"><kbd>H</kbd> HOLD</span>
+          </div>
+          <div class="instrument-controls" aria-label="Chart controls">
+            <button id="sweep-toggle" class="tui-btn" type="button" aria-keyshortcuts="H" aria-label="Hold scan" title="Hold scan (H)" aria-pressed="false" hidden><span class="btn-glyph" aria-hidden="true">&#8545;</span><span class="btn-label">HOLD SCAN</span></button>
+            <a class="replay tui-btn" href="index.html" aria-label="Replay transmission" title="Replay transmission"><span class="btn-glyph" aria-hidden="true">&#8630;</span><span class="btn-label">REPLAY RX</span></a>
+          </div>
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>
