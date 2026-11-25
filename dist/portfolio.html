@@ -7,7 +7,7 @@
     <meta name="description" content="Yeon Jun Kim (Calavera), an undergraduate at Hallym University exploring computer science, AI, embedded systems, astronomy, physics, and creative projects.">
     <title>Yeon Jun Kim // Star Chart</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141716'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%23e3b871' stroke-width='2'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23e3b871'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="portfolio.css?v=about-contact-9">
+    <link rel="stylesheet" href="portfolio.css?v=dossier-fluid-3">
     <link rel="stylesheet" href="typography.css?v=site-type-1" />
     <script defer src="portfolio.js?v=projects-1"></script>
   </head>
@@ -72,7 +72,12 @@
                     <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Projects and return to star chart">[ESC] Return to star chart</a>
                   </div>
                   <p class="record-meta">CAT // HD-01 &middot; SEC-A1 &middot; K2 III</p>
-                  <section class="project-group" aria-labelledby="hackathons-title">
+                  <div class="dossier-filters waypoint-track" id="projects-filters" role="group" aria-label="Jump to project category">
+                    <button type="button" class="filter-pill waypoint-btn" data-project-jump="hackathons" aria-pressed="true"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Hackathons</span><span class="waypoint-count">02</span></button>
+                    <span class="waypoint-leg" aria-hidden="true"></span>
+                    <button type="button" class="filter-pill waypoint-btn" data-project-jump="personal" aria-pressed="false"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Personal</span><span class="waypoint-count">03</span></button>
+                  </div>
+                  <section class="project-group" data-project-group="hackathons" aria-labelledby="hackathons-title">
                     <h3 id="hackathons-title" class="record-body">Hackathon Participation</h3>
                     <article class="project-card">
                       <h4>Meta Global AI Developer Hackathon &mdash; SignalTrace</h4>
@@ -86,6 +91,7 @@
                             <img src="media/signaltrace.webp" alt="SignalTrace filter sensitivity comparison and pulse waveform plots" width="1280" height="720" loading="lazy">
                             <span class="project-media-caption">Official hackathon gallery</span>
                           </a>
+                          <button type="button" class="media-zoom-btn" aria-label="Inspect SignalTrace preview larger">[ + ]</button>
                         </figure>
                       </div>
                     </article>
@@ -102,13 +108,59 @@
                             <img src="media/nasa-space-apps-certificate.webp" alt="NASA Space Apps Challenge certificate of participation for Yeon Jun Kim" width="1080" height="835" loading="lazy">
                             <span class="project-media-caption">View certificate (PDF)</span>
                           </a>
+                          <button type="button" class="media-zoom-btn" aria-label="Inspect NASA certificate preview larger">[ + ]</button>
                         </figure>
                       </div>
                     </article>
                   </section>
-                  <section class="project-group" aria-labelledby="personal-projects-title">
+                  <section class="project-group" data-project-group="personal" aria-labelledby="personal-projects-title">
                     <h3 id="personal-projects-title">Personal projects</h3>
-                    <!-- Add personal project articles here. -->
+                    <article class="project-card">
+                      <h4>Elsewhere (WIP)</h4>
+                      <div class="project-with-media">
+                        <div class="project-description">
+                          <p>I&rsquo;m building a travel app that pairs photos with my Google Maps Timeline. I can follow a trip on an interactive map or export a short film of the route.</p>
+                        </div>
+                        <figure class="project-media">
+                          <a class="project-media-link" href="media/elsewhere-preview.webp" aria-label="Open full-size Elsewhere preview">
+                            <img src="media/elsewhere-preview.webp" alt="Elsewhere trip gallery with five illustrated stops on a sample journey through Portugal" width="1440" height="1184" loading="lazy">
+                            <span class="project-media-caption">Open full-size preview</span>
+                          </a>
+                          <button type="button" class="media-zoom-btn" aria-label="Inspect Elsewhere preview larger">[ + ]</button>
+                        </figure>
+                      </div>
+                    </article>
+                    <article class="project-card">
+                      <h4>Second Brain Operations (WIP)</h4>
+                      <div class="project-with-media">
+                        <div class="project-description">
+                          <p>I&rsquo;m building a desktop dashboard for my AI coding sessions. It shows which agent is working on each task, which model it uses, and which notes from my Obsidian vault it received.</p>
+                        </div>
+                        <figure class="project-media">
+                          <a class="project-media-link" href="media/second-brain-operations-preview.webp" aria-label="Open full-size Second Brain Operations preview">
+                            <img src="media/second-brain-operations-preview.webp" alt="Second Brain Operations task flow showing a coordinator, builder and reviewer on a sample coding task" width="1440" height="920" loading="lazy">
+                            <span class="project-media-caption">Open full-size preview</span>
+                          </a>
+                          <button type="button" class="media-zoom-btn" aria-label="Inspect Second Brain Operations preview larger">[ + ]</button>
+                        </figure>
+                      </div>
+                    </article>
+                    <article class="project-card">
+                      <h4>Allowance</h4>
+                      <div class="project-with-media">
+                        <div class="project-description">
+                          <p>I built a Windows tray app to track my Codex and Claude Code usage in one place. I can check how much of each allowance is left and when it resets.</p>
+                          <div class="link-row"><a href="https://github.com/calavera16/Allowance">Code on GitHub</a></div>
+                        </div>
+                        <figure class="project-media">
+                          <a class="project-media-link" href="media/allowance-preview.webp" aria-label="Open full-size Allowance preview">
+                            <img src="media/allowance-preview.webp" alt="Allowance dashboard comparing Codex and Claude usage bars and reset times" width="1254" height="903" loading="lazy">
+                            <span class="project-media-caption">Open full-size preview</span>
+                          </a>
+                          <button type="button" class="media-zoom-btn" aria-label="Inspect Allowance preview larger">[ + ]</button>
+                        </figure>
+                      </div>
+                    </article>
                   </section>
                 </section>
                 <section class="destination" id="research" aria-labelledby="research-title" tabindex="-1">
@@ -117,7 +169,18 @@
                     <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Research and return to star chart">[ESC] Return to star chart</a>
                   </div>
                   <p class="record-meta">CAT // HD-02 &middot; SEC-C3 &middot; B3 V</p>
-                  <ol class="research-timeline" aria-label="Research experience" role="list">
+                  <div class="dossier-filters waypoint-track" id="research-filters" role="group" aria-label="Jump to research category">
+                    <button type="button" class="filter-pill waypoint-btn" data-research-jump="experience" aria-pressed="true"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Experience</span></button>
+                    <span class="waypoint-leg" aria-hidden="true"></span>
+                    <button type="button" class="filter-pill waypoint-btn" data-research-jump="ippg" aria-pressed="false"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">iPPG</span><span class="waypoint-count">03</span></button>
+                    <span class="waypoint-leg" aria-hidden="true"></span>
+                    <button type="button" class="filter-pill waypoint-btn" data-research-jump="sleep" aria-pressed="false"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Sleep</span><span class="waypoint-count">01</span></button>
+                    <span class="waypoint-leg" aria-hidden="true"></span>
+                    <button type="button" class="filter-pill waypoint-btn" data-research-jump="stress" aria-pressed="false"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Stress</span></button>
+                    <span class="waypoint-leg" aria-hidden="true"></span>
+                    <button type="button" class="filter-pill waypoint-btn" data-research-jump="awards" aria-pressed="false"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Awards</span><span class="waypoint-count">03</span></button>
+                  </div>
+                  <ol class="research-timeline" data-research-section="experience" aria-label="Research experience" role="list">
                     <li>
                       <p class="appointment-dates">Current</p>
                       <div class="research-appointment">
@@ -133,7 +196,7 @@
                       </div>
                     </li>
                   </ol>
-                  <article class="project-card research-topic" aria-labelledby="ippg-research-title">
+                  <article class="project-card research-topic" data-research-section="ippg" aria-labelledby="ippg-research-title">
                     <h3 id="ippg-research-title">iPPG Research</h3>
                     <p>Imaging photoplethysmography (iPPG) is a non invasive technique for measuring physiological signals via video recordings.</p>
                     <section class="research-papers" id="ippg-papers" aria-labelledby="ippg-papers-title ippg-research-title">
@@ -145,7 +208,7 @@
                             <span class="work-context">Korean Society of Digital Health &middot; Fall 2025 conference book &middot; pp. 153&ndash;159</span>
                             <a href="https://www.digitalhealthkorea.or.kr/board/bbs/board.php?bo_table=schedule&amp;wr_id=13">Conference page</a>
                           </div>
-                          <img class="paper-pipeline" src="media/paper-ippg-full-frame.png" alt="Full-frame video passes through a 2D CNN and either LSTM or BiGRU to estimate heart rate, systolic and diastolic blood pressure." width="900" height="390" loading="lazy">
+                          <img class="paper-pipeline" src="media/paper-ippg-full-frame.png" alt="Full-frame video passes through a 2D CNN and either LSTM or BiGRU to estimate heart rate, systolic and diastolic blood pressure." width="900" height="390" loading="lazy" tabindex="0" role="button" title="Inspect pipeline diagram">
                         </li>
                         <li id="ippg-roi" class="paper-entry">
                           <div class="paper-description">
@@ -156,7 +219,7 @@
                               <a href="https://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE12416387">Proceedings article on DBpia</a>
                             </div>
                           </div>
-                          <img class="paper-pipeline" src="media/paper-ippg-roi.png" alt="Hand, face, dual ROI and full-frame video are compared through CNN-BiGRU models to estimate systolic and diastolic blood pressure." width="900" height="390" loading="lazy">
+                          <img class="paper-pipeline" src="media/paper-ippg-roi.png" alt="Hand, face, dual ROI and full-frame video are compared through CNN-BiGRU models to estimate systolic and diastolic blood pressure." width="900" height="390" loading="lazy" tabindex="0" role="button" title="Inspect pipeline diagram">
                         </li>
                         <li id="ippg-heart-rate" class="paper-entry">
                           <div class="paper-description">
@@ -164,12 +227,12 @@
                             <span class="work-context">Korean Society of Digital Health &middot; Spring 2026 &middot; Oral presentation</span>
                             <a href="https://www.digitalhealthkorea.or.kr/board/bbs/board.php?bo_table=schedule&amp;wr_id=18">Conference page</a>
                           </div>
-                          <img class="paper-pipeline" src="media/paper-ippg-heart-rate.png" alt="Green-channel facial iPPG passes through STFT and CNN-BiGRU with attention to predict a heart-rate distribution." width="900" height="390" loading="lazy">
+                          <img class="paper-pipeline" src="media/paper-ippg-heart-rate.png" alt="Green-channel facial iPPG passes through STFT and CNN-BiGRU with attention to predict a heart-rate distribution." width="900" height="390" loading="lazy" tabindex="0" role="button" title="Inspect pipeline diagram">
                         </li>
                       </ul>
                     </section>
                   </article>
-                  <article class="project-card research-topic" aria-labelledby="sleep-research-title">
+                  <article class="project-card research-topic" data-research-section="sleep" aria-labelledby="sleep-research-title">
                     <h3 id="sleep-research-title">Sleep Research</h3>
                     <p>Can a pulse recording alone distinguish sleep from wakefulness? I built two pipelines for overnight recordings from the Multi-Ethnic Study of Atherosclerosis (MESA). One keeps the raw waveform. The other summarizes it in 38 features.</p>
                     <p>The next experiment is to compare them on participants whose recordings were held out of training.</p>
@@ -183,16 +246,16 @@
                             <p>This study compares EEG, ECG and PPG for sleep staging using AAUWSS recordings.</p>
                             <a href="https://besk.kr/Conference/ConferenceView.asp?AC=0&amp;CODE=CC20260501&amp;CpPage=96">Conference program</a>
                           </div>
-                          <img class="paper-pipeline" src="media/paper-sleep-modalities.png" alt="AAUWSS EEG, ECG and PPG are compared using CNNs and feature-based models to classify wake, NREM and REM." width="900" height="390" loading="lazy">
+                          <img class="paper-pipeline" src="media/paper-sleep-modalities.png" alt="AAUWSS EEG, ECG and PPG are compared using CNNs and feature-based models to classify wake, NREM and REM." width="900" height="390" loading="lazy" tabindex="0" role="button" title="Inspect pipeline diagram">
                         </li>
                       </ul>
                     </section>
                   </article>
-                  <article class="project-card research-topic" aria-labelledby="stress-research-title">
+                  <article class="project-card research-topic" data-research-section="stress" aria-labelledby="stress-research-title">
                     <h3 id="stress-research-title">Stress/Emotion Research</h3>
                     <p>Can a pulse waveform distinguish positive and negative emotion in people the model hasn&rsquo;t seen? I explored that question with blood volume pulse recordings. I designed the comparison around separate groups of participants for training and testing.</p>
                   </article>
-                  <section class="project-group research-awards" aria-labelledby="research-awards-title">
+                  <section class="project-group research-awards" data-research-section="awards" aria-labelledby="research-awards-title">
                     <h3 id="research-awards-title">Awards</h3>
                     <p>Recognition for coauthored conference work.</p>
                     <ul class="award-list">
@@ -209,6 +272,7 @@
                               <img src="media/ksdh-2026-oral-award.webp" alt="Korean Society of Digital Health 2026 Best Oral Presentation Award certificate" width="1200" height="849" loading="lazy">
                               <span class="project-media-caption">View award certificate (PDF)</span>
                             </a>
+                            <button type="button" class="media-zoom-btn" aria-label="Inspect Best Oral Presentation Award certificate larger">[ + ]</button>
                           </figure>
                         </div>
                       </li>
@@ -225,6 +289,7 @@
                               <img src="media/kics-2025-paper-award.webp" alt="KICS AI Society 2025 Best Paper Award certificate" width="849" height="1200" loading="lazy">
                               <span class="project-media-caption">View award certificate (PDF)</span>
                             </a>
+                            <button type="button" class="media-zoom-btn" aria-label="Inspect Best Paper Award certificate larger">[ + ]</button>
                           </figure>
                         </div>
                       </li>
@@ -241,6 +306,7 @@
                               <img src="media/ksdh-2025-poster-award.webp" alt="Korean Society of Digital Health 2025 Poster Encouragement Award certificate" width="1200" height="848" loading="lazy">
                               <span class="project-media-caption">View award certificate (PDF)</span>
                             </a>
+                            <button type="button" class="media-zoom-btn" aria-label="Inspect Poster Encouragement Award certificate larger">[ + ]</button>
                           </figure>
                         </div>
                       </li>
@@ -574,26 +640,28 @@
                   <article class="project-card about-card" aria-labelledby="about-research-title">
                     <h3 id="about-research-title">Research &amp; technical interests</h3>
                     <p>Topics I&rsquo;ve worked on so far, alongside wider areas in engineering and science I want to explore next.</p>
-                    <ul class="tag-list" aria-label="Research and technical interests">
-                      <li>Artificial Intelligence &amp; ML</li>
-                      <li>Computer Science</li>
-                      <li>Embedded Systems</li>
-                      <li>Signal Processing</li>
-                      <li>Biomedical Engineering</li>
-                      <li>Astronomy</li>
-                      <li>Physics</li>
+                    <ul class="tag-list" data-tag-group="about-research-note" aria-label="Research and technical interests">
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Deep learning for physiological signals, distributional modeling, and hands-on AI builds.">Artificial Intelligence &amp; ML</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Undergraduate CS coursework at Hallym University and building practical software tools.">Computer Science</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Interested in hardware-software interfaces, sensors, and embedded devices.">Embedded Systems</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Filtering, time-frequency analysis (STFT), and physiological waveform modeling.">Signal Processing</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Camera-based iPPG, sleep staging, and blood volume pulse research.">Biomedical Engineering</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="A long-time fascination with space, telemetry, and stargazing&mdash;the inspiration behind this site.">Astronomy</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Curious about how physical principles connect back to computing, sensing, and space.">Physics</button></li>
                     </ul>
+                    <p class="tag-readout" id="about-research-note" aria-live="polite">&gt; Select a topic to inspect.</p>
                   </article>
                   <article class="project-card about-card" aria-labelledby="about-hobbies-title">
                     <h3 id="about-hobbies-title">Hobbies &amp; outside interests</h3>
                     <p>My other hobbies include making videos, skiing, playing games, and reading about space and physics.</p>
-                    <ul class="tag-list" aria-label="Hobbies and outside interests">
-                      <li>Content Creation</li>
-                      <li>Skiing</li>
-                      <li>Gaming</li>
-                      <li>Stargazing &amp; Astronomy</li>
-                      <li>Physics</li>
+                    <ul class="tag-list" data-tag-group="about-hobbies-note" aria-label="Hobbies and outside interests">
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Making videos, editing, and sharing project demos on YouTube.">Content Creation</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Hitting the slopes whenever winter comes around.">Skiing</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Unwinding with games and exploring interactive systems.">Gaming</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Looking up at the night sky and reading about space.">Stargazing &amp; Astronomy</button></li>
+                      <li><button type="button" class="tag-chip" aria-pressed="false" data-tag-note="Reading about physics and how the universe works outside of class.">Physics</button></li>
                     </ul>
+                    <p class="tag-readout" id="about-hobbies-note" aria-live="polite">&gt; Select a hobby to inspect.</p>
                   </article>
                 </section>
                 <section class="destination" id="contact" aria-labelledby="contact-title" tabindex="-1">
@@ -602,10 +670,21 @@
                     <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Contact and return to star chart">[ESC] Return to star chart</a>
                   </div>
                   <p class="record-meta">CAT // HD-04 &middot; SEC-D4 &middot; F5 V</p>
+                  <div class="contact-status" id="contact-status">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    <span>SEL // SEOUL</span>
+                    <span aria-hidden="true">&middot;</span>
+                    <time id="seoul-clock">--:-- KST</time>
+                    <span aria-hidden="true">&middot;</span>
+                    <span class="status-open">OPEN TO COLLAB</span>
+                  </div>
                   <p class="record-body">Feel free to reach out about research ideas, hackathons, side projects, creative collaborations, or just to say hi.</p>
                   <p>Whether you want to explore a new research topic together, team up on a build, or chat about tech, science, or hobbies, you can find me on any of the channels below.</p>
                   <article class="project-card contact-card" aria-labelledby="contact-channels-title">
-                    <h3 id="contact-channels-title">Channels</h3>
+                    <div class="card-head-row">
+                      <h3 id="contact-channels-title">Channels</h3>
+                      <button type="button" id="copy-email-btn" class="copy-email-btn" data-copy-email="yeonjunkim70@gmail.com">Copy email</button>
+                    </div>
                     <!-- CONTACT LINKS: edit only the four href values below.
                          Profiles: full https:// URLs. Email: mailto:you@your-domain.
                          Leave href="" to hide a channel. Inspector shortcuts mirror these links. -->
@@ -617,10 +696,10 @@
                     </div>
                     <!-- END CONTACT LINKS -->
                     <dl class="channel-guide" aria-label="What you will find on each channel">
-                      <div><dt>GitHub</dt><dd>Code, experiments, and hackathon builds</dd></div>
-                      <div><dt>Instagram</dt><dd>Everyday updates, skiing, and hobbies</dd></div>
-                      <div><dt>Email</dt><dd>Research ideas, collaborations, and direct notes</dd></div>
-                      <div><dt>YouTube</dt><dd>Content creation, videos, and project demos</dd></div>
+                      <div data-guide-channel="github"><dt>GitHub</dt><dd>Code, experiments, and hackathon builds</dd></div>
+                      <div data-guide-channel="instagram"><dt>Instagram</dt><dd>Everyday updates, skiing, and hobbies</dd></div>
+                      <div data-guide-channel="email"><dt>Email</dt><dd>Research ideas, collaborations, and direct notes</dd></div>
+                      <div data-guide-channel="youtube"><dt>YouTube</dt><dd>Content creation, videos, and project demos</dd></div>
                     </dl>
                   </article>
                 </section>
@@ -677,6 +756,21 @@
             <a class="replay tui-btn" href="index.html" aria-label="Replay transmission" title="Replay transmission"><span class="btn-glyph" aria-hidden="true">&#8630;</span><span class="btn-label">REPLAY RX</span></a>
           </div>
         </footer>
+      </div>
+      <div id="media-lightbox" class="media-lightbox" role="dialog" aria-modal="true" aria-labelledby="lightbox-caption" hidden>
+        <div class="media-lightbox-dialog">
+          <div class="media-lightbox-head">
+            <span class="media-lightbox-title" id="lightbox-title">MEDIA INSPECTOR // FULL RESOLUTION</span>
+            <button type="button" id="lightbox-close" class="media-lightbox-close" aria-keyshortcuts="Escape">[ESC] Close</button>
+          </div>
+          <div class="media-lightbox-body">
+            <img id="lightbox-img" src="" alt="">
+            <div class="media-lightbox-foot">
+              <p id="lightbox-caption" class="media-lightbox-caption"></p>
+              <a id="lightbox-source" class="media-lightbox-source" href="" hidden>Open original &rarr;</a>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </body>

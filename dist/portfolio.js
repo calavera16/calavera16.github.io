@@ -1300,6 +1300,12 @@
     const onChart = active === document.body || active === chart || active?.closest('.star-chart');
     if (!onChart) return;
 
+    if (event.key === 'Escape' && lightbox && !lightbox.hidden) {
+      event.preventDefault();
+      closeLightbox();
+      return;
+    }
+
     if (event.key === 'Escape' && sections.has(routeId())) {
       event.preventDefault();
       location.hash = 'map';
@@ -1337,6 +1343,304 @@
     shortcut.setAttribute('href', href);
     shortcut.textContent = channel.textContent;
     operatorLinks?.append(shortcut);
+  }
+
+  /* Fluid dossier interactivity: console lightbox, filters, SignalTrace scope,
+     clickable Jack deck, About tag readouts, Seoul KST clock, Copy email, and
+     linked Contact channel-guide highlighting. */
+  const lightbox = document.getElementById('media-lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
+  const lightboxCaption = document.getElementById('lightbox-caption');
+  const lightboxSource = document.getElementById('lightbox-source');
+  const lightboxClose = document.getElementById('lightbox-close');
+  let lightboxTrigger = null;
+
+  function openLightbox({ src, alt, caption, href, sourceLabel, trigger }) {
+    if (!lightbox || !lightboxImg || !src) return;
+    lightboxTrigger = trigger || document.activeElement;
+    lightboxImg.setAttribute('src', src);
+    lightboxImg.setAttribute('alt', alt || '');
+    if (lightboxCaption) lightboxCaption.textContent = caption || alt || '';
+    if (lightboxSource) {
+      if (href) {
+        lightboxSource.setAttribute('href', href);
+        lightboxSource.textContent = `${sourceLabel || 'Open original'} \u2192`;
+        lightboxSource.hidden = false;
+      } else {
+        lightboxSource.hidden = true;
+      }
+    }
+    lightbox.hidden = false;
+    lightboxClose?.focus?.();
+  }
+
+  function closeLightbox() {
+    if (!lightbox || lightbox.hidden) return;
+    lightbox.hidden = true;
+    lightboxTrigger?.focus?.();
+    lightboxTrigger = null;
+  }
+
+  lightboxClose?.addEventListener('click', closeLightbox);
+  lightbox?.addEventListener('click', event => {
+    if (event.target === lightbox) closeLightbox();
+  });
+  window.addEventListener('hashchange', closeLightbox);
+
+  for (const btn of document.querySelectorAll('.media-zoom-btn')) {
+    btn.addEventListener('click', () => {
+      const figure = btn.closest('.project-media');
+      const img = figure?.querySelector('img');
+      const link = figure?.querySelector('a');
+      if (!img) return;
+      openLightbox({
+        src: img.getAttribute('src'),
+        alt: img.getAttribute('alt'),
+        caption: img.getAttribute('alt'),
+        href: link?.getAttribute('href'),
+        sourceLabel: link?.querySelector('.project-media-caption')?.textContent?.trim() || 'Open original',
+        trigger: btn,
+      });
+    });
+  }
+
+  for (const diagram of document.querySelectorAll('.paper-pipeline')) {
+    const inspectDiagram = () => {
+      const entry = diagram.closest('.paper-entry');
+      const title = entry?.querySelector('cite')?.textContent?.trim();
+      const link = entry?.querySelector('a');
+      openLightbox({
+        src: diagram.getAttribute('src'),
+        alt: diagram.getAttribute('alt'),
+        caption: title ? `${title} \u2014 ${diagram.getAttribute('alt')}` : diagram.getAttribute('alt'),
+        href: link?.getAttribute('href'),
+        sourceLabel: link?.textContent?.trim() || 'Open source',
+        trigger: diagram,
+      });
+    };
+    diagram.addEventListener('click', inspectDiagram);
+    diagram.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        inspectDiagram();
+      }
+    });
+  }
+
+  // Smooth constellation waypoint roll-down navigation for Projects and Research.
+  const dossierPanel = document.querySelector('.dossier-panel');
+  let waypointScrollLockUntil = 0;
+
+  function setActiveWaypoint(trackId, buttons, activeBtn) {
+    const activeIndex = buttons.indexOf(activeBtn);
+    for (const btn of buttons) {
+      btn.setAttribute('aria-pressed', String(btn === activeBtn));
+    }
+    const track = document.getElementById(trackId);
+    if (!track) return;
+    const legs = [...document.querySelectorAll('.waypoint-leg')].filter(leg => leg.isDescendantOf ? leg.isDescendantOf(track) : track.contains?.(leg));
+    legs.forEach((leg, index) => {
+      leg.classList.toggle('is-passed', activeIndex > index);
+    });
+  }
+
+  function rollToCategory(trackId, target, buttons, activeBtn, logLabel) {
+    setActiveWaypoint(trackId, buttons, activeBtn);
+    if (!target) return;
+    target.classList.remove('is-jump-target');
+    const behavior = reduced.matches ? 'auto' : 'smooth';
+    waypointScrollLockUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + (reduced.matches ? 0 : 700);
+    if (
+      dossierPanel
+      && typeof dossierPanel.scrollTo === 'function'
+      && typeof dossierPanel.getBoundingClientRect === 'function'
+      && typeof target.getBoundingClientRect === 'function'
+    ) {
+      const panelRect = dossierPanel.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const stickyBar = target.closest('.destination')?.querySelector('.dossier-filters');
+      const barHeight = stickyBar?.getBoundingClientRect ? Math.min(120, stickyBar.getBoundingClientRect().height) : 48;
+      const top = Math.max(0, (dossierPanel.scrollTop || 0) + (targetRect.top - panelRect.top) - (barHeight + 16));
+      dossierPanel.scrollTo({ top, behavior });
+    } else if (typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior, block: 'start' });
+    }
+    target.classList.add('is-jump-target');
+    appendLog(`JUMP -> ${logLabel}`);
+  }
+
+  const projectJumpBtns = [...document.querySelectorAll('[data-project-jump]')];
+  const projectGroups = [...document.querySelectorAll('[data-project-group]')];
+  for (const btn of projectJumpBtns) {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.projectJump;
+      const target = projectGroups.find(group => group.dataset.projectGroup === key);
+      rollToCategory('projects-filters', target, projectJumpBtns, btn, `PROJECTS:${key.toUpperCase()}`);
+    });
+  }
+
+  const researchJumpBtns = [...document.querySelectorAll('[data-research-jump]')];
+  const researchSections = [...document.querySelectorAll('[data-research-section]')];
+  for (const btn of researchJumpBtns) {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.researchJump;
+      const target = researchSections.find(section => section.dataset.researchSection === key);
+      rollToCategory('research-filters', target, researchJumpBtns, btn, `RESEARCH:${key.toUpperCase()}`);
+    });
+  }
+
+  // Gently sync the active waypoint node as the user scrolls manually inside a dossier.
+  dossierPanel?.addEventListener('scroll', () => {
+    const nowMs = typeof performance !== 'undefined' ? performance.now() : 0;
+    if (nowMs < waypointScrollLockUntil) return;
+    const route = routeId();
+    const pairs = route === 'projects'
+      ? { trackId: 'projects-filters', buttons: projectJumpBtns, targets: projectGroups, attr: 'projectGroup' }
+      : route === 'research'
+        ? { trackId: 'research-filters', buttons: researchJumpBtns, targets: researchSections, attr: 'researchSection' }
+        : null;
+    if (!pairs || !pairs.buttons.length || typeof dossierPanel.getBoundingClientRect !== 'function') return;
+    const panelTop = dossierPanel.getBoundingClientRect().top + 96;
+    let currentIndex = 0;
+    pairs.targets.forEach((section, idx) => {
+      if (typeof section.getBoundingClientRect === 'function' && section.getBoundingClientRect().top <= panelTop) {
+        currentIndex = idx;
+      }
+    });
+    const activeKey = pairs.targets[currentIndex]?.dataset?.[pairs.attr];
+    const activeBtn = pairs.buttons.find(b => (b.dataset.projectJump || b.dataset.researchJump) === activeKey) || pairs.buttons[0];
+    if (activeBtn) setActiveWaypoint(pairs.trackId, pairs.buttons, activeBtn);
+  });
+
+  // About: click the shuffling Jack deck to deal/cut immediately to the next Jack.
+  const jackArtEl = document.querySelector('.jack-art');
+  if (jackArtEl && hasJackLayers) {
+    jackArtEl.classList.add('is-interactive');
+    jackArtEl.setAttribute('title', 'Click to cut and deal the next Jack');
+    jackArtEl.addEventListener('click', () => {
+      if (reduced.matches) {
+        const nextCycle = (Math.floor(shuffleElapsedMs / SHUFFLE_CYCLE_MS) + 1) % JACK_ORDERS.length;
+        shuffleElapsedMs = nextCycle * SHUFFLE_CYCLE_MS;
+        renderJackShuffle(shuffleElapsedMs, false);
+      } else {
+        const cycle = Math.floor(shuffleElapsedMs / SHUFFLE_CYCLE_MS);
+        const phase = (shuffleElapsedMs % SHUFFLE_CYCLE_MS) / SHUFFLE_CYCLE_MS;
+        shuffleElapsedMs = phase < 0.14
+          ? cycle * SHUFFLE_CYCLE_MS + SHUFFLE_CYCLE_MS * 0.16
+          : (cycle + 1) * SHUFFLE_CYCLE_MS;
+        renderJackShuffle(shuffleElapsedMs, false);
+      }
+      appendLog('DECK CUT -> NEXT JACK.');
+    });
+  }
+
+  // About: interactive interest & hobby chips revealing concise personal notes.
+  const tagChips = [...document.querySelectorAll('.tag-chip')];
+  const tagDefaults = new Map();
+  for (const list of document.querySelectorAll('[data-tag-group]')) {
+    const out = document.getElementById(list.dataset.tagGroup);
+    if (out) tagDefaults.set(list.dataset.tagGroup, out.textContent);
+  }
+  for (const chip of tagChips) {
+    chip.addEventListener('click', () => {
+      const list = chip.closest('[data-tag-group]');
+      const groupId = list?.dataset?.tagGroup;
+      const out = groupId ? document.getElementById(groupId) : null;
+      const wasPressed = chip.getAttribute('aria-pressed') === 'true';
+      for (const peer of tagChips) {
+        if (peer.closest('[data-tag-group]') === list) peer.setAttribute('aria-pressed', 'false');
+      }
+      if (wasPressed) {
+        if (out) {
+          out.textContent = tagDefaults.get(groupId) || '';
+          out.classList.remove('has-note');
+        }
+        return;
+      }
+      chip.setAttribute('aria-pressed', 'true');
+      if (out) {
+        out.textContent = `> [ ${chip.textContent.trim().toUpperCase()} ] ${chip.dataset.tagNote || ''}`;
+        out.classList.add('has-note');
+      }
+    });
+  }
+
+  // Contact: live Seoul KST clock, one-click Copy email, and linked channel-guide hover.
+  const seoulClockEl = document.getElementById('seoul-clock');
+  function formatSeoulTime() {
+    try {
+      if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+        const formatted = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Seoul',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }).format(new Date());
+        return `${formatted} KST`;
+      }
+    } catch { /* fall back to fixed UTC+9 offset below */ }
+    const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    return `${kst.toISOString().slice(11, 16)} KST`;
+  }
+  function updateSeoulClock() {
+    if (!seoulClockEl) return;
+    const text = formatSeoulTime();
+    seoulClockEl.textContent = text;
+    seoulClockEl.setAttribute('datetime', text);
+  }
+  updateSeoulClock();
+  window.addEventListener('hashchange', updateSeoulClock);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) updateSeoulClock(); });
+  if (typeof setInterval === 'function') {
+    setInterval(() => {
+      if (!document.hidden && routeId() === 'contact') updateSeoulClock();
+    }, 15000);
+  }
+
+  const copyEmailBtn = document.getElementById('copy-email-btn');
+  let copyResetTimer = 0;
+  copyEmailBtn?.addEventListener('click', () => {
+    const emailHref = document.querySelector('[data-contact-channel="email"]')?.getAttribute('href') || '';
+    const email = copyEmailBtn.dataset.copyEmail || emailHref.replace(/^mailto:/i, '');
+    if (!email) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(email).catch?.(() => {});
+      }
+    } catch { /* ignore restricted clipboard contexts */ }
+    copyEmailBtn.textContent = `Copied: ${email}`;
+    copyEmailBtn.classList.add('is-copied');
+    appendLog('EMAIL COPIED -> CLIPBOARD.');
+    if (typeof clearTimeout === 'function' && copyResetTimer) clearTimeout(copyResetTimer);
+    if (typeof setTimeout === 'function') {
+      copyResetTimer = setTimeout(() => {
+        copyEmailBtn.textContent = 'Copy email';
+        copyEmailBtn.classList.remove('is-copied');
+      }, 2200);
+    }
+  });
+
+  const contactChannelEls = [...document.querySelectorAll('[data-contact-channel]')];
+  const guideChannelEls = [...document.querySelectorAll('[data-guide-channel]')];
+  function highlightChannel(name) {
+    for (const guide of guideChannelEls) {
+      guide.classList.toggle('is-active', Boolean(name && guide.dataset.guideChannel === name));
+    }
+    for (const link of contactChannelEls) {
+      link.classList.toggle('is-linked', Boolean(name && link.dataset.contactChannel === name));
+    }
+  }
+  for (const link of contactChannelEls) {
+    const name = link.dataset.contactChannel;
+    link.addEventListener('pointerenter', () => highlightChannel(name));
+    link.addEventListener('focus', () => highlightChannel(name));
+    link.addEventListener('pointerleave', () => highlightChannel(null));
+    link.addEventListener('blur', () => highlightChannel(null));
+  }
+  for (const guide of guideChannelEls) {
+    const name = guide.dataset.guideChannel;
+    guide.addEventListener('pointerenter', () => highlightChannel(name));
+    guide.addEventListener('pointerleave', () => highlightChannel(null));
   }
 
   stampSession();

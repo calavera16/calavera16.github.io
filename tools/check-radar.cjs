@@ -765,7 +765,7 @@ test("Both entry points load the shared semantic reading hierarchy", () => {
   }
 });
 
-test("Projects labels, semantic hackathon groups and native legacy fragment stay consistent", () => {
+test("Projects labels, semantic project groups and native legacy fragment stay consistent", () => {
   const h = harness();
   assert.equal(h.select('.star-name')[0].textContent, 'Projects');
   assert.equal(h.select('.idx-label')[0].textContent, 'Projects');
@@ -802,12 +802,61 @@ test("Projects labels, semantic hackathon groups and native legacy fragment stay
   assert.equal(cards[0].querySelector('a').href, 'https://youtu.be/FOfwBFH0nXI');
   assert.equal(cards[1].querySelector('h4').textContent, 'NASA Space Apps Challenge \u2014 BioTwin Sync');
   assert.equal(cards[1].querySelector('a').href, 'https://github.com/calavera16/BioTwin-Sync');
-  assert.doesNotMatch(html, /Elsewhere|Galaxy Battery Display|travel-film editor|small desk display/);
+  assert.doesNotMatch(html, /Galaxy Battery Display|small desk display/);
+  const personalCards = h.select('.project-card').filter(card => card.isDescendantOf(personal));
+  assert.deepEqual(personalCards.map(card => card.querySelector('h4')?.textContent), [
+    'Elsewhere (WIP)', 'Second Brain Operations (WIP)', 'Allowance'
+  ], 'personal projects retain their order and visible work-in-progress status');
+  for (const card of personalCards) {
+    assert.equal(card.tagName, 'ARTICLE');
+    assert.ok(card.querySelector('p')?.textContent.trim(), 'each project has a description');
+  }
+  const allowanceLink = h.select('a').find(link => link.isDescendantOf(personalCards[2]) && link.href === 'https://github.com/calavera16/Allowance');
+  assert.ok(allowanceLink, 'Allowance links to its verified repository');
+  assert.equal(h.click(allowanceLink).defaultPrevented, false, 'Allowance keeps native link navigation');
   assert.match(html, /<noscript>[^]*open Projects, Research, About, or Contact/);
   assert.match(html, /<span id="work" class="route-alias" aria-hidden="true"><\/span>\s*<section class="destination" id="projects"/);
   assert.match(css, /\.primary-pane:has\(\.route-alias:target\) \.chart-panel \{ display: none; \}/);
   assert.match(css, /\.primary-pane:has\(\.route-alias:target\) \.dossier-panel \{ display: block; \}/);
   assert.match(css, /\.route-alias:target \+ \.destination \{ display: block; \}/);
+});
+
+test("personal project previews share native local image links and readable captions", () => {
+  const h = harness({ hash: '#projects' });
+  const group = h.select('.project-group').find(node => node.getAttribute('aria-labelledby') === 'personal-projects-title');
+  const cards = h.select('.project-card').filter(node => node.isDescendantOf(group));
+  const previews = [
+    ['Elsewhere', 'elsewhere-preview.webp', '1440', '1184'],
+    ['Second Brain Operations', 'second-brain-operations-preview.webp', '1440', '920'],
+    ['Allowance', 'allowance-preview.webp', '1254', '903'],
+  ];
+  for (const [index, [name, filename, width, height]] of previews.entries()) {
+    const card = cards[index];
+    const row = card.querySelector('.project-with-media');
+    const description = row.querySelector('.project-description');
+    const figure = row.querySelector('.project-media');
+    assert.equal(figure.tagName, 'FIGURE');
+    assert.ok(row.children.indexOf(description) < row.children.indexOf(figure), 'preview follows its description when stacked');
+    const links = h.select('a').filter(node => node.isDescendantOf(figure));
+    assert.equal(links.length, 1, 'image and caption form one native link');
+    const link = links[0];
+    const image = link.querySelector('img');
+    const path = `media/${filename}`;
+    assert.equal(link.href, path);
+    assert.equal(image.getAttribute('src'), path);
+    assert.equal(link.getAttribute('aria-label'), `Open full-size ${name} preview`);
+    assert.equal(link.getAttribute('tabindex'), null);
+    assert.equal(h.click(link).defaultPrevented, false, 'controller preserves native full-size navigation');
+    assert.equal(link.querySelector('.project-media-caption').textContent, 'Open full-size preview');
+    assert.ok(image.getAttribute('alt').includes(name), 'preview has project-specific descriptive alternative text');
+    assert.ok(image.getAttribute('alt').length > name.length + 10);
+    assert.equal(image.getAttribute('width'), width);
+    assert.equal(image.getAttribute('height'), height);
+    assert.equal(image.getAttribute('loading'), 'lazy');
+    const webp = fs.readFileSync(`dist/${path}`);
+    assert.equal(webp.subarray(0, 4).toString(), 'RIFF');
+    assert.equal(webp.subarray(8, 12).toString(), 'WEBP');
+  }
 });
 
 test("SignalTrace preview and caption share the native official gallery link", () => {
@@ -959,7 +1008,7 @@ test("Projects centers surplus width and uses it for copy plus links or media", 
   }
   const h = harness();
   const rows = h.select('.project-with-media').filter(row => row.isDescendantOf(h.id('projects')));
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 5, 'both hackathons and all three personal projects reuse the responsive media rows');
   for (const row of rows) {
     assert.ok(row.querySelector('.project-description'));
     assert.ok(row.querySelector('.project-media').querySelector('img'), 'paired row contains its project preview');
@@ -1351,4 +1400,96 @@ test("Papers remain grouped under their research topics with original model pipe
   assert.doesNotMatch(h.id('sleep-modalities').textContent, /MESA/);
   assert.match(css, /@container project-dossier \(min-width: 84ch\)\s*\{\s*\.paper-entry\s*\{\s*grid-template-columns: minmax\(0, 1fr\) minmax\(300px, 350px\)/);
   assert.match(css, /\.paper-entry\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+});
+
+test("Dossier interactivity: smooth category jump scroll, lightbox Escape priority, interactive About, and live Contact tools", () => {
+  const h = harness({ hash: '#projects' });
+  const scrolls = [];
+  const dossierPanel = h.select('.dossier-panel')[0];
+  dossierPanel.scrollTop = 0;
+  dossierPanel.scrollTo = opts => scrolls.push(opts);
+
+  // 1. Projects category pills smoothly roll down to the matching group without hiding others.
+  assert.equal(h.frames.size, 0, 'Projects interactions keep idle RAF loops off');
+  assert.equal(h.id('signaltrace-scope'), null, 'SignalTrace interactive pulse scope is removed');
+  const hackathonsBtn = h.select('[data-project-jump]').find(btn => btn.dataset.projectJump === 'hackathons');
+  const personalBtn = h.select('[data-project-jump]').find(btn => btn.dataset.projectJump === 'personal');
+  const hackathonsGroup = h.select('[data-project-group]').find(el => el.dataset.projectGroup === 'hackathons');
+  const personalGroup = h.select('[data-project-group]').find(el => el.dataset.projectGroup === 'personal');
+  h.id('projects-filters').getBoundingClientRect = () => ({ left: 0, top: 0, width: 600, height: 52 });
+  h.id('research-filters').getBoundingClientRect = () => ({ left: 0, top: 0, width: 600, height: 52 });
+  personalGroup.getBoundingClientRect = () => ({ left: 0, top: 480, width: 600, height: 400 });
+  h.click(personalBtn);
+  assert.equal(hackathonsGroup.hidden, false, 'all project categories stay visible when rolling down');
+  assert.equal(personalGroup.hidden, false);
+  assert.equal(personalBtn.getAttribute('aria-pressed'), 'true');
+  assert.equal(hackathonsBtn.getAttribute('aria-pressed'), 'false');
+  assert.equal(personalGroup.classList.contains('is-jump-target'), true);
+  const projectLegs = h.select('.waypoint-leg').filter(leg => leg.isDescendantOf(h.id('projects-filters')));
+  assert.equal(projectLegs.length, 1);
+  assert.equal(projectLegs[0].classList.contains('is-passed'), true, 'constellation leg illuminates when jumping to Personal');
+  assert.equal(scrolls.at(-1).behavior, 'smooth');
+  assert.ok(scrolls.at(-1).top > 0, 'smoothly scrolls dossier panel down to Personal projects');
+
+  // 2. Console Media Lightbox opens from project zoom buttons & Research pipeline diagrams,
+  //    and Escape closes the lightbox FIRST without closing the active dossier.
+  const zoomBtn = h.select('.media-zoom-btn')[0];
+  h.click(zoomBtn);
+  const lightbox = h.id('media-lightbox');
+  assert.equal(lightbox.hidden, false, 'zoom button opens console lightbox');
+  assert.equal(h.id('lightbox-img').getAttribute('src'), 'media/signaltrace.webp');
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: 'Escape' }).defaultPrevented, true);
+  assert.equal(lightbox.hidden, true, 'Escape closes lightbox cleanly');
+  assert.equal(h.location.hash, '#projects', 'closing lightbox keeps the active dossier open');
+
+  // 3. Research category pills smoothly roll down to the chosen section & pipeline diagrams inspect cleanly.
+  h.route('#research');
+  const awardsJump = h.select('[data-research-jump]').find(btn => btn.dataset.researchJump === 'awards');
+  const awardsSection = h.select('[data-research-section]').find(s => s.dataset.researchSection === 'awards');
+  const ippgSection = h.select('[data-research-section]').find(s => s.dataset.researchSection === 'ippg');
+  awardsSection.getBoundingClientRect = () => ({ left: 0, top: 920, width: 600, height: 400 });
+  h.click(awardsJump);
+  assert.equal(awardsSection.hidden, false);
+  assert.equal(ippgSection.hidden, false, 'all research sections remain visible while jumping');
+  assert.equal(awardsJump.getAttribute('aria-pressed'), 'true');
+  assert.equal(awardsSection.classList.contains('is-jump-target'), true);
+  const researchLegs = h.select('.waypoint-leg').filter(leg => leg.isDescendantOf(h.id('research-filters')));
+  assert.equal(researchLegs.length, 4);
+  assert.ok(researchLegs.every(leg => leg.classList.contains('is-passed')), 'all preceding constellation legs light up when jumping to Awards');
+  assert.equal(scrolls.at(-1).behavior, 'smooth');
+  assert.ok(scrolls.at(-1).top > 0, 'smoothly rolls down to Research awards');
+  h.click(h.select('.paper-pipeline')[0]);
+  assert.equal(lightbox.hidden, false, 'clicking a pipeline diagram opens lightbox');
+  assert.match(h.id('lightbox-img').getAttribute('src'), /^media\/paper-/);
+  h.click(h.id('lightbox-close'));
+  assert.equal(lightbox.hidden, true);
+
+  // 4. About: interactive interest/hobby chips update terminal readouts & clicking Jack cards cuts deck.
+  h.route('#about');
+  const astroChip = h.select('.tag-chip').find(btn => btn.textContent.trim() === 'Astronomy');
+  const researchReadout = h.id('about-research-note');
+  h.click(astroChip);
+  assert.equal(astroChip.getAttribute('aria-pressed'), 'true');
+  assert.match(researchReadout.textContent, /\[ ASTRONOMY \]/);
+  assert.equal(researchReadout.classList.contains('has-note'), true);
+  h.click(astroChip);
+  assert.equal(astroChip.getAttribute('aria-pressed'), 'false');
+  assert.equal(researchReadout.classList.contains('has-note'), false);
+  const beforeDeck = h.id('jack-front').textContent;
+  h.click(h.select('.jack-art')[0]);
+  assert.notEqual(h.id('jack-front').textContent, beforeDeck, 'clicking Jack cards deals/cuts immediately');
+
+  // 5. Contact: Seoul KST clock, Copy email feedback, and linked channel-guide hover.
+  h.route('#contact');
+  assert.match(h.id('seoul-clock').textContent, /^\d{2}:\d{2} KST$/);
+  const copyBtn = h.id('copy-email-btn');
+  h.click(copyBtn);
+  assert.match(copyBtn.textContent, /Copied: yeonjunkim70@gmail\.com/);
+  assert.equal(copyBtn.classList.contains('is-copied'), true);
+  const githubLink = h.select('[data-contact-channel]').find(el => el.dataset.contactChannel === 'github');
+  const githubGuide = h.select('[data-guide-channel]').find(el => el.dataset.guideChannel === 'github');
+  h.event(githubLink, 'pointerenter');
+  assert.equal(githubGuide.classList.contains('is-active'), true, 'hovering a channel button highlights its guide column');
+  h.event(githubLink, 'pointerleave');
+  assert.equal(githubGuide.classList.contains('is-active'), false);
 });
