@@ -72,3 +72,18 @@
 .index-link { min-width: 0; }
 .idx-label { overflow-wrap: anywhere; }
 
+/* Keep mobile titles, panel legends, and quotes breathable on narrow phones
+   without changing desktop (> 700px) sizes. */
+@media (max-width: 700px) {
+  :root {
+    --type-title: clamp(1.18rem, 4.6vw, 1.45rem);
+    --type-section: clamp(1rem, 3.7vw, 1.2rem);
+    --type-heading: clamp(.95rem, 3.4vw, 1.1rem);
+    --type-description: clamp(.875rem, 3.3vw, .96rem);
+  }
+  .station-panel legend {
+    font-size: clamp(.78rem, 2.8vw, .92rem);
+    letter-spacing: .04em;
+  }
+}
+

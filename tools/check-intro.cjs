@@ -1,6 +1,6 @@
 "use strict";
 
-// Offline regression checks for the native 245x83 / 111x49 ASCII intro engine.
+// Offline regression checks for the native 245x83 wide / 79x53 portrait narrow ASCII intro engine.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
@@ -9,7 +9,7 @@ const test = require("node:test");
 const asciiIntroSource = fs.readFileSync("dist/ascii-intro.js", "utf8");
 const stationCss = fs.readFileSync("dist/station.css", "utf8");
 
-test("native ascii-intro renders uniform 245x83 wide and 111x49 narrow 3-act scenes cleanly", () => {
+test("native ascii-intro renders uniform 245x83 wide and 79x53 portrait narrow 3-act scenes cleanly", () => {
   const window = {};
   const els = new Map();
   const getEl = (id) => {
@@ -31,7 +31,7 @@ test("native ascii-intro renders uniform 245x83 wide and 111x49 narrow 3-act sce
     { filename: "dist/ascii-intro.js" },
   );
 
-  for (const [mode, cols, rows] of [["wide", 245, 83], ["narrow", 111, 49]]) {
+  for (const [mode, cols, rows] of [["wide", 245, 83], ["narrow", 79, 53]]) {
     for (const t of [0.4, 1.05, 3.3, 4.7, 5.4]) {
       const snap = window.SignalAsciiIntro.renderSnapshot(t, mode, false);
       for (const layer of ["grid", "cool", "warm", "struct", "signal", "fx"]) {
@@ -82,12 +82,12 @@ test("native ascii-intro renders uniform 245x83 wide and 111x49 narrow 3-act sce
   reducedHandle.dispose();
 });
 
-test("CRT intro CSS geometry matches 245x83 wide and 111x49 narrow buffers and removes all legacy 3D assets", () => {
+test("CRT intro CSS geometry matches 245x83 wide and 79x53 portrait narrow buffers and removes all legacy 3D assets", () => {
   assert.match(stationCss, /width:\s*245ch;/);
   assert.match(stationCss, /font-size:\s*min\(\.643cqi,\s*1\.038cqh,\s*7\.7px\)/);
-  assert.match(stationCss, /width:\s*111ch;/);
-  assert.match(stationCss, /font-size:\s*min\(1\.41cqi,\s*1\.75cqh,\s*6\.8px\)/);
-  for (const [cols, rows, inlineScale, blockScale] of [[245, 83, 0.00643, 0.01038], [111, 49, 0.0141, 0.0175]]) {
+  assert.match(stationCss, /width:\s*79ch;/);
+  assert.match(stationCss, /font-size:\s*min\(1\.98cqi,\s*1\.62cqh,\s*8\.8px\)/);
+  for (const [cols, rows, inlineScale, blockScale] of [[245, 83, 0.00643, 0.01038], [79, 53, 0.0198, 0.0162]]) {
     assert.ok(cols * 0.625 * inlineScale < 1, `${cols}ch fits inside CRT well`);
     assert.ok(rows * 1.14 * blockScale < 1, `${rows} rows fit inside CRT well`);
   }

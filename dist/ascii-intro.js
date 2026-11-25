@@ -1,6 +1,6 @@
 /* Hand-crafted high-resolution multi-color character-cell opening cinema for SEL / SEOUL RX.
    Renders 3 choreographed scenes directly into 6 color-separated <pre> layers
-   at 245x83 (wide) and 111x49 (narrow) CRT resolution:
+   at 245x83 (wide) and 79x53 (portrait narrow) CRT resolution:
      Act 0A (0.00-2.10s): Deep-space Milky Way, beacon lock, ignition & departure
      Act 0B (2.10-4.25s): Rotating 3D ASCII Earth, East Asia lights & Seoul lock
      Act 0C (4.25-6.40s): Seoul rooftop parabolic radio dish & phosphor capture
@@ -9,7 +9,7 @@
   "use strict";
 
   const WIDE = { cols: 245, rows: 83, wide: true, suffix: "" };
-  const NARROW = { cols: 111, rows: 49, wide: false, suffix: "-narrow" };
+  const NARROW = { cols: 79, rows: 53, wide: false, suffix: "-narrow" };
   const LAYERS = ["grid", "cool", "warm", "struct", "signal", "fx"];
   const DURATION = 6.4;
   const STEP_MS = 50; // 20 Hz crisp CRT terminal cadence
@@ -748,9 +748,10 @@ z.48.1.eo.4
     }
 
     // High-res 3D sphere projection balanced between left HUD and right Seoul callout.
-    const cx = cols * (wide ? 0.56 : 0.54);
-    const cy = rows * (wide ? 0.53 : 0.54);
-    const R = lerp(rows * 0.285, rows * 0.395, p);
+    const cx = cols * (wide ? 0.56 : 0.50);
+    const cy = rows * (wide ? 0.53 : 0.52);
+    const narrowMaxR = Math.min(rows * 0.36, (cols * 0.42) / CHAR_ASPECT);
+    const R = wide ? lerp(rows * 0.285, rows * 0.395, p) : lerp(narrowMaxR * 0.72, narrowMaxR, p);
     const centerLonDeg = lerp(104, 128, p);
     const tiltRad = 0.26;
     const cosTilt = Math.cos(tiltRad);
@@ -1015,19 +1016,20 @@ z.48.1.eo.4
     }
 
     // High-res tilted parabolic radio dish aimed upper-left at the incoming signal!
-    const dishBaseX = cols * (wide ? 0.58 : 0.56);
+    const dishBaseX = cols * (wide ? 0.58 : 0.54);
+    const dishScale = wide ? scaleY : Math.min(scaleX * 1.15, scaleY);
     const vertexX = dishBaseX;
-    const vertexY = deckY - (wide ? 14 : 8) * scaleY;
+    const vertexY = deckY - (wide ? 14 : 8) * dishScale;
     const tilt = 0.34;
     const cosT = Math.cos(tilt);
     const sinT = Math.sin(tilt);
-    const halfSpan = (wide ? 22.0 : 11.4) * scaleY;
-    const focal = (wide ? 17.8 : 9.4) * scaleY;
+    const halfSpan = (wide ? 22.0 : 11.4) * dishScale;
+    const focal = (wide ? 17.8 : 9.4) * dishScale;
 
     const approachP = smooth(localT / 0.85);
     const contactAge = Math.max(0, localT - 0.85);
     const flash = contactAge > 0 ? Math.exp(-contactAge * 2.8) : 0;
-    const rippleRadius = contactAge > 0 ? Math.min(halfSpan + 5 * scaleY, contactAge * (wide ? 38 : 22) * scaleY) : -1;
+    const rippleRadius = contactAge > 0 ? Math.min(halfSpan + 5 * dishScale, contactAge * (wide ? 38 : 22) * dishScale) : -1;
 
     function dishToScreen(u, v) {
       const rx = u * cosT - v * sinT;

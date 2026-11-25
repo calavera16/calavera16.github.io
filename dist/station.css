@@ -255,7 +255,7 @@ h1, h2 { margin: 0; font: inherit; font-weight: 600; }
   border-color: rgb(20 23 22 / 45%);
   color: var(--console);
 }
-@media (pointer: coarse) { .intro-btn kbd { display: none; } }
+@media (pointer: coarse) { .intro-btn kbd, .command .key-hint { display: none; } }
 
 /* Receiver, decoder, and message console stages. */
 .reception-grid { display: grid; grid-template-columns: minmax(24ch, .7fr) minmax(0, 2fr); gap: 2ch; }
@@ -414,29 +414,92 @@ blockquote {
   .intro-viewport { flex: none; height: clamp(300px, 56vw, 480px); }
 }
 @media (max-width: 700px) {
-  .stage { align-items: flex-start; padding: 10px; }
-  .console-shell { padding: 0 1ch 1ch; }
-  .console-band { margin: 0 -1ch; padding: .6ch 1ch; flex-wrap: wrap; gap: 0 2ch; }
-  .band-mode, .intro-feed-meta { display: none; }
-  .intro-viewport { padding: 8px; height: clamp(300px, 76vw, 440px); }
-  .intro-screen { width: 111ch; height: 55.86em; font-size: min(1.18vw, 1.7vh, 6.8px); }
-  @supports (font-size: 1cqi) { .intro-screen { font-size: min(1.41cqi, 1.75cqh, 6.8px); } }
+  .stage {
+    align-items: flex-start;
+    padding: max(6px, env(safe-area-inset-top)) 0 max(10px, env(safe-area-inset-bottom));
+  }
+  .console-shell {
+    border-inline: 0;
+    padding: 0 10px 12px;
+  }
+  .console-band {
+    margin: 0 -10px;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    font-size: .86em;
+  }
+  .band-mode, .intro-feed-meta, .intro-range { display: none; }
+  .console-heading {
+    align-items: flex-start;
+    padding: 10px 0;
+    gap: 8px 12px;
+    flex-wrap: wrap;
+  }
+  .intro-heading-group { flex: 1 1 auto; }
+  .intro-panel { padding: 4px 6px 6px; }
+  .intro-viewport {
+    padding: 6px;
+    height: clamp(340px, 56svh, 500px);
+  }
+  .intro-screen {
+    width: 79ch;
+    height: 60.42em;
+    font-size: min(1.88vw, 1.52vh, 8.8px);
+  }
+  @supports (font-size: 1cqi) {
+    /* 79 cols x <= .625em, 53 rows x 1.14em; fills a portrait phone CRT cleanly. */
+    .intro-screen { font-size: min(1.98cqi, 1.62cqh, 8.8px); }
+  }
   .intro-wide { display: none; }
   .intro-narrow { display: block; }
-  .console-heading { align-items: flex-start; padding: 1.5ch 0; gap: 1ch; flex-wrap: wrap; }
-  .reception-grid { display: flex; flex-direction: column; gap: 1.5ch; }
-  .spectrum-panel { order: -1; padding: 1ch; }
+  .intro-footer {
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 8px;
+    gap: 8px;
+  }
+  .intro-footer-left { justify-content: center; }
+  .intro-progress { font-size: .84em; }
+  .intro-footer-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .intro-btn { width: 100%; padding: .35ch .8ch; }
+  .receiver-title { flex: 1 1 100%; gap: 4px 12px; }
+  .receiver-heading .command { width: 100%; text-align: center; }
+  .reception-grid { display: flex; flex-direction: column; gap: 12px; }
+  .spectrum-panel { order: -1; padding: 8px 10px; }
   .spectrum-wide { display: none; }
   .spectrum-narrow { display: block; width: 37ch; font-size: min(1em, calc(100cqi / 24)); }
-  .packet-panel { padding: .5ch 1ch 1ch; }
-  .receiver-location { margin-bottom: 1ch; }
-  .packet-data { display: grid; grid-template-columns: 9ch 1fr; gap: .5ch 1ch; }
+  .packet-panel { padding: 8px 10px 10px; }
+  .receiver-location { margin-bottom: 8px; }
+  .packet-data { display: grid; grid-template-columns: 9ch 1fr; gap: 4px 10px; }
   .packet-data dt { margin: 0; }
-  .event-panel { margin-top: 1.5ch; padding: .5ch 1ch 1ch; }
-  .console-footer { flex-wrap: wrap; gap: 1ch; }
-  .decode-panel, .message-panel { padding: 2ch 1ch; }
-  .decode-source { margin-bottom: 3ch; }
-  .message-content .console-footer { align-items: flex-start; }
+  .event-panel { margin-top: 12px; padding: 8px 10px 10px; }
+  .console-footer {
+    flex-wrap: wrap;
+    padding-top: 10px;
+    gap: 6px 12px;
+    font-size: .85em;
+  }
+  .decode-panel { padding: 14px 12px; margin: 4px 0 12px; }
+  .decode-source { margin-bottom: 14px; font-size: .88em; }
+  #decode-buffer { margin-bottom: 14px; }
+  #decode-step { margin-top: 14px; }
+  .message-panel { padding: 18px 14px; }
+  .message blockquote { max-width: none; line-height: 1.62; }
+  .message-attribution {
+    max-width: none;
+    margin-top: 16px;
+    padding-top: 10px;
+    font-size: .82em;
+  }
+  .portfolio-handoff { margin-top: 14px; }
+  .portfolio-handoff .portfolio-link { width: 100%; justify-content: center; }
+  .message-content .console-footer { align-items: center; }
 }
 @media (max-height: 650px) and (min-width: 701px) {
   .terminal, .decoder, .message { align-items: flex-start; }
