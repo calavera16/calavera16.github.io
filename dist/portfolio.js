@@ -1444,6 +1444,12 @@
     });
   }
 
+  function isDossierScrollable() {
+    if (!dossierPanel || typeof dossierPanel.scrollTo !== 'function') return false;
+    if (typeof dossierPanel.scrollHeight !== 'number' || typeof dossierPanel.clientHeight !== 'number') return true;
+    return dossierPanel.scrollHeight > dossierPanel.clientHeight + 2;
+  }
+
   function rollToCategory(trackId, target, buttons, activeBtn, logLabel) {
     setActiveWaypoint(trackId, buttons, activeBtn);
     if (!target) return;
@@ -1451,8 +1457,7 @@
     const behavior = reduced.matches ? 'auto' : 'smooth';
     waypointScrollLockUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + (reduced.matches ? 0 : 700);
     if (
-      dossierPanel
-      && typeof dossierPanel.scrollTo === 'function'
+      isDossierScrollable()
       && typeof dossierPanel.getBoundingClientRect === 'function'
       && typeof target.getBoundingClientRect === 'function'
     ) {
@@ -1489,8 +1494,8 @@
     });
   }
 
-  // Gently sync the active waypoint node as the user scrolls manually inside a dossier.
-  dossierPanel?.addEventListener('scroll', () => {
+  // Gently sync the active waypoint node as the user scrolls inside a dossier or mobile document flow.
+  function syncActiveWaypoint() {
     const nowMs = typeof performance !== 'undefined' ? performance.now() : 0;
     if (nowMs < waypointScrollLockUntil) return;
     const route = routeId();
@@ -1499,18 +1504,22 @@
       : route === 'research'
         ? { trackId: 'research-filters', buttons: researchJumpBtns, targets: researchSections, attr: 'researchSection' }
         : null;
-    if (!pairs || !pairs.buttons.length || typeof dossierPanel.getBoundingClientRect !== 'function') return;
-    const panelTop = dossierPanel.getBoundingClientRect().top + 96;
+    if (!pairs || !pairs.buttons.length) return;
+    const refTop = isDossierScrollable() && typeof dossierPanel.getBoundingClientRect === 'function'
+      ? dossierPanel.getBoundingClientRect().top + 96
+      : 96;
     let currentIndex = 0;
     pairs.targets.forEach((section, idx) => {
-      if (typeof section.getBoundingClientRect === 'function' && section.getBoundingClientRect().top <= panelTop) {
+      if (typeof section.getBoundingClientRect === 'function' && section.getBoundingClientRect().top <= refTop) {
         currentIndex = idx;
       }
     });
     const activeKey = pairs.targets[currentIndex]?.dataset?.[pairs.attr];
     const activeBtn = pairs.buttons.find(b => (b.dataset.projectJump || b.dataset.researchJump) === activeKey) || pairs.buttons[0];
     if (activeBtn) setActiveWaypoint(pairs.trackId, pairs.buttons, activeBtn);
-  });
+  }
+  dossierPanel?.addEventListener('scroll', syncActiveWaypoint);
+  window.addEventListener('scroll', syncActiveWaypoint, { passive: true });
 
   // About: click the shuffling Jack deck to deal/cut immediately to the next Jack.
   const jackArtEl = document.querySelector('.jack-art');

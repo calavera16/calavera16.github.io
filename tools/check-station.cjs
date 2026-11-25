@@ -354,7 +354,10 @@ test("station console markup, spectrum, escape, decode buffer, lifecycle and cle
   assert.match(html, /<title>Yeon Jun Kim \/\/ Transmission<\/title>/);
   assert.match(html, /viewBox='0 0 32 32'/);
   assert.match(html, /id="intro-portfolio-link"[^>]+href="portfolio\.html"/, "ASCII intro footer exposes 1-click fast-path to portfolio");
+  assert.match(html, /id="decoder-portfolio-link"[^>]+href="portfolio\.html"/, "decoder footer exposes direct portfolio exit");
+  assert.match(html, /class="quote-credit"[^>]*>&mdash; H\. Jackson Brown Jr\./, "decoded quote credits author separately from operator");
   assert.match(html, /class="message-attribution"[^>]*>OPERATOR \/\/ YEON JUN KIM/, "decoded message displays operator identity");
+  assert.match(css, /\.intro-btn-primary\s*\{[^}]*background:\s*var\(--signal\)/s, "primary Portfolio intro CTA uses high-contrast amber fill");
   assert.match(html, /class="band-mode"> \/\/ RECEIVER CONSOLE<\/span>/);
   assert.match(html, /src="ascii-intro\.js/);
 

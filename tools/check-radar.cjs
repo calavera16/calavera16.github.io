@@ -1493,3 +1493,43 @@ test("Dossier interactivity: smooth category jump scroll, lightbox Escape priori
   h.event(githubLink, 'pointerleave');
   assert.equal(githubGuide.classList.contains('is-active'), false);
 });
+
+test("Audit polish regressions: no Contact wrap, Inspector flex pin, deduped About tags, mobile legend/flow and waypoint scroll fallback", () => {
+  const h = harness({ hash: '#about' });
+  // 1. Contact buttons never break channel names mid-word.
+  assert.match(css, /#contact-links a:not\(\[href=""\]\)\s*\{[^}]*white-space:\s*nowrap;[^}]*overflow-wrap:\s*normal/s, 'Contact buttons stay single-line without mid-word wraps');
+  // 2. Target Inspector pins quick-contact shortcuts below scrollable inspector-records.
+  assert.match(css, /\.inspector-panel\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden/s);
+  assert.match(css, /\.inspector-records\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/s);
+  assert.match(css, /\.operator-links\s*\{[^}]*flex:\s*0 0 auto/s);
+  // 3. About summary is crisp (<200 chars) and its two tag lists share zero duplicate labels.
+  const aboutSummary = h.id('about').querySelector('.record-body').textContent.trim();
+  assert.ok(aboutSummary.length > 40 && aboutSummary.length < 200, `About summary fits Inspector cleanly (${aboutSummary.length} chars)`);
+  const tagLists = h.select('.tag-list').filter(list => list.isDescendantOf(h.id('about')));
+  const researchTags = h.select('.tag-chip').filter(btn => btn.isDescendantOf(tagLists[0])).map(btn => btn.textContent.trim().toLowerCase());
+  const hobbyTags = h.select('.tag-chip').filter(btn => btn.isDescendantOf(tagLists[1])).map(btn => btn.textContent.trim().toLowerCase());
+  assert.equal(researchTags.filter(tag => hobbyTags.includes(tag)).length, 0, 'Research interests and hobbies have no duplicate chips');
+  assert.ok(!hobbyTags.some(tag => tag.includes('astronomy') || tag.includes('physics')), 'Hobbies stay distinct from Research astronomy/physics chips');
+  // 4. Star chart legend pairs wide/narrow grid readouts and keeps legend items intact.
+  assert.match(html, /class="chart-wide">121&times;41 GRID \/\/ 1:1200 LY<\/span>/);
+  assert.match(html, /class="chart-narrow">57&times;25 GRID \/\/ 1:1200 LY<\/span>/);
+  assert.match(css, /\.legend-item\s*\{\s*white-space:\s*nowrap;\s*\}/);
+  // 5. Mobile (<700px) drops nested vertical scrollbars, keeps heading 1-line, and centers Jack cards.
+  const mobileBlock = css.slice(css.indexOf('@media (max-width: 700px)'));
+  assert.match(mobileBlock, /\.console-heading #chart-title\s*\{[^}]*text-wrap:\s*nowrap/);
+  assert.match(mobileBlock, /\.dossier-panel\s*\{[^}]*max-height:\s*none;[^}]*overflow:\s*visible/);
+  assert.match(mobileBlock, /\.side-stack \.inspector-panel\s*\{[^}]*max-height:\s*none;[^}]*overflow:\s*visible/);
+  assert.match(mobileBlock, /\.jack-art\s*\{[^}]*justify-self:\s*center/);
+  // 6. When mobile dossier-panel is non-scrollable, waypoint jumps fall back to target.scrollIntoView().
+  h.route('#projects');
+  const dossierPanel = h.select('.dossier-panel')[0];
+  dossierPanel.scrollHeight = 800;
+  dossierPanel.clientHeight = 800;
+  const intoViews = [];
+  const personalGroup = h.select('[data-project-group]').find(el => el.dataset.projectGroup === 'personal');
+  personalGroup.scrollIntoView = opts => intoViews.push(opts);
+  const personalBtn = h.select('[data-project-jump]').find(btn => btn.dataset.projectJump === 'personal');
+  h.click(personalBtn);
+  assert.equal(intoViews.length, 1, 'mobile document-flow waypoint jump scrolls page via scrollIntoView');
+  assert.equal(intoViews[0].behavior, 'smooth');
+});

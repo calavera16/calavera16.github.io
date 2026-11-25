@@ -296,6 +296,12 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
   color: var(--muted);
   font-size: .8em;
 }
+.chart-legend-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .25ch 1.15ch;
+}
+.legend-item { white-space: nowrap; }
 .chart-viewport noscript {
   position: absolute;
   inset: auto 0 0;
@@ -329,7 +335,16 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
 .index-link.is-preview .idx-key, .index-link.is-preview .idx-meta { color: inherit; }
 .index-link[aria-current=page] { background: var(--signal); border-color: var(--signal); color: var(--console); }
 .index-link[aria-current=page] .idx-cursor, .index-link[aria-current=page] .idx-key, .index-link[aria-current=page] .idx-meta { color: inherit; opacity: 1; }
-.inspector-panel { overflow: auto; }
+.inspector-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.inspector-records {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
 .telemetry-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -353,9 +368,10 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
 .operator-links {
   display: flex;
   flex-wrap: wrap;
+  flex: 0 0 auto;
   gap: .6ch;
-  margin-top: 1ch;
-  padding-top: .85ch;
+  margin-top: .85ch;
+  padding-top: .8ch;
   border-top: 1px dashed var(--rule-dim);
 }
 /* Empty destinations stay absent with or without JavaScript. */
@@ -469,7 +485,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
   margin: 0;
   padding: .6ch;
   justify-self: start;
-  font-size: min(.39em, 1.32cqi);
+  font-size: min(.42em, 1.42cqi);
   max-width: 100%;
 }
 .jack-stage {
@@ -492,9 +508,9 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
   inset: 0;
   pointer-events: none;
 }
-.jack-layer-back { color: var(--rule); opacity: .78; }
-.jack-layer-mid { color: var(--muted); }
-.jack-layer-front { color: var(--bone); }
+.jack-layer-back { color: #717d70; opacity: .88; }
+.jack-layer-mid { color: #adb6aa; }
+.jack-layer-front { color: #efeee4; }
 .jack-layer-gold {
   color: var(--signal);
   text-shadow: 0 0 7px rgb(227 184 113 / 32%);
@@ -603,21 +619,23 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
 .research-topic > h3, .research-papers > h4, .research-awards > h3, .about-card > h3, .contact-card > h3 { color: var(--signal); }
 #contact-links {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20ch, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(23ch, 1fr));
   gap: 1.4ch;
   margin-block: 1.6ch 0;
 }
 #contact-links a:not([href=""]) {
   display: inline-flex;
   align-items: center;
-  gap: 1.1ch;
+  gap: .85ch;
   min-height: 56px;
-  padding: 1.1ch 1.6ch;
+  padding: 1ch 1.25ch;
   border: 1px solid var(--rule);
   background: var(--well);
   color: var(--bone);
   font-size: calc(var(--type-description) * 1.12);
   font-weight: 600;
+  white-space: nowrap;
+  overflow-wrap: normal;
   text-decoration: none;
   transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
 }
@@ -649,7 +667,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
 #contact-links .icon-youtube { color: #df8269; }
 .channel-guide {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20ch, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(23ch, 1fr));
   gap: 1.2ch 1.4ch;
   margin: 1.6ch 0 0;
   padding-top: 1.5ch;
@@ -818,6 +836,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
   .console-band { margin: 0 -1ch; padding: .5ch 1ch; }
   .band-mode, .band-epoch { display: none; }
   .console-heading { padding: 1ch 0; }
+  .heading-group { flex: 1 1 100%; }
+  .console-heading #chart-title { font-size: clamp(1.05rem, 4.3vw, 1.38rem); text-wrap: nowrap; }
   .station-panel { padding: .6ch .8ch .9ch; }
   .chart-viewport { padding: 8px; height: clamp(320px, 76vw, 460px); }
   .chart-screen { width: 57ch; height: 29.5em; }
@@ -825,8 +845,13 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
   .chart-wide { display: none; } .chart-narrow { display: block; }
   .star-link { left: var(--x-narrow); top: var(--y-narrow); --core: 1.9em; font-size: max(12.5px, 1.26em); }
   .star-tag { font-size: 1em; padding: .24ch .55ch; }
+  .dossier-panel { max-height: none; overflow: visible; overscroll-behavior: auto; }
   .side-stack { display: flex; flex-direction: column; }
   .inspector-panel { order: -1; }
+  .side-stack .inspector-panel { max-height: none; overflow: visible; }
+  .inspector-records { overflow: visible; }
+  .log-panel { max-height: none; overflow: visible; }
+  .jack-art { justify-self: center; font-size: min(1.58cqi, 5.4px); padding: .4ch 0; }
   .keybinds { gap: .6ch 1ch; }
   .console-footer { align-items: flex-start; }
   .destination { padding: 1.3ch; }
