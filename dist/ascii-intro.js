@@ -28,15 +28,16 @@
   }
 
   function makeBuffers(cols, rows) {
-    const out = {};
+    const out = { _gridTag: null, _gridStr: "" };
     for (const name of LAYERS) {
       out[name] = Array.from({ length: rows }, () => Array(cols).fill(" "));
     }
     return out;
   }
 
-  function clearBuffers(bufs, cols, rows) {
+  function clearBuffers(bufs, cols, rows, clearGrid = false) {
     for (const name of LAYERS) {
+      if (name === "grid" && !clearGrid) continue;
       const grid = bufs[name];
       for (let r = 0; r < rows; r++) grid[r].fill(" ");
     }
@@ -81,8 +82,11 @@
   }
 
   function drawFrame(bufs, spec, camTag) {
+    const tagKey = `${spec.cols}x${spec.rows}:${camTag || ""}`;
+    if (bufs._gridTag === tagKey) return;
     const { cols, rows, wide } = spec;
     const g = bufs.grid;
+    for (let r = 0; r < rows; r++) g[r].fill(" ");
     putRaw(g, cols, rows, 0, 0, "\u250c");
     putRaw(g, cols, rows, cols - 1, 0, "\u2510");
     putRaw(g, cols, rows, 0, rows - 1, "\u2514");
@@ -105,6 +109,8 @@
         g[0][2 + i] = label[i];
       }
     }
+    bufs._gridTag = tagKey;
+    bufs._gridStr = g.map((row) => row.join("")).join("\n");
   }
 
   function lineChar(dx, dy) {
@@ -556,17 +562,29 @@ z.48.1.eo.4
     return Uint16Array.from(row.split("."), run => (edge += parseInt(run, 36)));
   });
 
-  function isEastAsiaLand(lonDeg, latDeg) {
-    const lon = ((lonDeg + 180) % 360 + 360) % 360;
-    const x = Math.floor(lon * 2);
-    const row = LAND_ROWS[clamp(Math.floor((90 - latDeg) * 2), 0, 359)];
-    let lo = 0, hi = row.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (x < row[mid]) hi = mid;
-      else lo = mid + 1;
+  // Pre-decode the 360x720 0.5-degree coast mask once for O(1) globe lookups.
+  const LAND_GRID = new Uint8Array(360 * 720);
+  for (let rowIdx = 0; rowIdx < LAND_ROWS.length; rowIdx++) {
+    const edges = LAND_ROWS[rowIdx];
+    const base = rowIdx * 720;
+    let start = 0;
+    let isLand = false;
+    for (let j = 0; j < edges.length; j++) {
+      const end = Math.min(720, edges[j]);
+      if (isLand) LAND_GRID.fill(1, base + start, base + end);
+      start = end;
+      isLand = !isLand;
     }
-    return (lo & 1) === 1;
+  }
+
+  function isEastAsiaLand(lonDeg, latDeg) {
+    let lon = (lonDeg + 180) % 360;
+    if (lon < 0) lon += 360;
+    const x = (lon * 2) | 0;
+    let y = Math.floor((90 - latDeg) * 2);
+    if (y < 0) y = 0;
+    else if (y > 359) y = 359;
+    return LAND_GRID[y * 720 + x] === 1;
   }
 
   const MAJOR_CITIES = [
@@ -595,17 +613,28 @@ z.48.1.eo.4
 
     // Sweeping diagonal multi-color Milky Way dust band with fine high-res filaments.
     const nebula = getNebula(spec);
+    const nebDensity = nebula.density;
+    const nebWarm = nebula.warm;
+    const warmBuf = bufs.warm;
+    const coolBuf = bufs.cool;
+    const driftXi = Math.floor(driftX);
+    const driftYi = Math.floor(driftY);
+    const densityScale = 1 - warp * 0.68;
+    const maxCol = cols - 1;
+    const maxRow = rows - 1;
     for (let r = 2; r < rows - 2; r++) {
+      const sy = r + driftYi < maxRow ? r + driftYi : maxRow;
+      const rowOffset = sy * cols;
+      const warmRow = warmBuf[r];
+      const coolRow = coolBuf[r];
       for (let c = 2; c < cols - 2; c++) {
-        const sx = Math.min(cols - 1, c + Math.floor(driftX));
-        const sy = Math.min(rows - 1, r + Math.floor(driftY));
-        const i = sy * cols + sx;
-        const density = nebula.density[i] * (1 - warp * 0.68);
+        const sx = c + driftXi < maxCol ? c + driftXi : maxCol;
+        const i = rowOffset + sx;
+        const density = nebDensity[i] * densityScale;
         if (density < 0.23) continue;
-        const warmPocket = nebula.warm[i];
         const ch = density > 0.72 ? "\u2592" : density > 0.56 ? "\u2591" : density > 0.40 ? ":" : "\u00b7";
-        if (warmPocket) bufs.warm[r][c] = ch;
-        else bufs.cool[r][c] = ch;
+        if (nebWarm[i]) warmRow[c] = ch;
+        else coolRow[c] = ch;
       }
     }
 
@@ -781,68 +810,82 @@ z.48.1.eo.4
     const cMin = Math.max(2, Math.floor(cx - R * CHAR_ASPECT - 1));
     const cMax = Math.min(cols - 3, Math.ceil(cx + R * CHAR_ASPECT + 1));
     const rimInner = 1 - 1.05 / R;
+    const rimInner2 = rimInner * rimInner;
+    const invR = 1 / R;
+    const invRx = 1 / (R * CHAR_ASPECT);
+    const RAD_TO_DEG = 180 / Math.PI;
+    const geoStep = 40 / R;
     const gridDeg = wide ? 20 : 30;
     const gridHalf = gridDeg * 0.5;
     const gridThresh = gridHalf - (wide ? 0.68 : 0.96);
 
     for (let r = rMin; r <= rMax; r++) {
-      const ny = (r - cy) / R;
+      const ny = (r - cy) * invR;
+      const ny2 = ny * ny;
+      const coolRow = bufs.cool[r];
+      const warmRow = bufs.warm[r];
+      const structRow = bufs.struct[r];
+      const fxRow = bufs.fx[r];
       for (let c = cMin; c <= cMax; c++) {
-        const nx = (c - cx) / (R * CHAR_ASPECT);
-        const d2 = nx * nx + ny * ny;
+        const nx = (c - cx) * invRx;
+        const d2 = nx * nx + ny2;
         if (d2 > 1.0) continue;
-        bufs.cool[r][c] = " ";
-        bufs.warm[r][c] = " ";
-        const nz = Math.sqrt(Math.max(0, 1 - d2));
-        const d = Math.sqrt(d2);
-
-        const gy = ny * cosTilt - nz * sinTilt;
-        const gz = ny * sinTilt + nz * cosTilt;
-        const latDeg = (-Math.asin(clamp(gy, -1, 1)) * 180) / Math.PI;
-        const lonDeg = centerLonDeg + (Math.atan2(nx, gz) * 180) / Math.PI;
+        coolRow[c] = " ";
+        warmRow[c] = " ";
+        const nz = Math.sqrt(1 - d2);
         const solar = nx * sunX + ny * sunY + nz * sunZ;
 
         // Crisp 1-cell atmospheric horizon limb.
-        if (d > rimInner) {
+        if (d2 > rimInner2) {
           const ax = Math.abs(nx);
           const ay = Math.abs(ny);
           let rimCh;
           if (ay > ax * 2.15) rimCh = "\u2500";
           else if (ax > ay * 2.15) rimCh = "\u2502";
           else rimCh = nx * ny > 0 ? "/" : "\\";
-          if (solar > 0.08) bufs.fx[r][c] = rimCh;
-          else if (solar > -0.25) bufs.struct[r][c] = rimCh;
-          else bufs.cool[r][c] = rimCh;
+          if (solar > 0.08) fxRow[c] = rimCh;
+          else if (solar > -0.25) structRow[c] = rimCh;
+          else coolRow[c] = rimCh;
           continue;
         }
 
-        const land = isEastAsiaLand(lonDeg, latDeg);
-        const latLine = Math.abs(((latDeg + 90) % gridDeg) - gridHalf) > gridThresh;
-        const lonLine = Math.abs((((lonDeg + 540) % gridDeg) - gridHalf)) > gridThresh;
+        const gy = ny * cosTilt - nz * sinTilt;
+        const gz = ny * sinTilt + nz * cosTilt;
+        const latDeg = -Math.asin(gy < -1 ? -1 : gy > 1 ? 1 : gy) * RAD_TO_DEG;
+        const lonDeg = centerLonDeg + Math.atan2(nx, gz) * RAD_TO_DEG;
 
+        const land = isEastAsiaLand(lonDeg, latDeg);
         if (land) {
           // Geographic detail stays fixed to the rotating globe, including a
           // one-cell coast edge and broad terrain ridges across the mainland.
-          const geoStep = 40 / R;
           const coast = !isEastAsiaLand(lonDeg + geoStep, latDeg) ||
             !isEastAsiaLand(lonDeg - geoStep, latDeg) ||
             !isEastAsiaLand(lonDeg, latDeg + geoStep) ||
             !isEastAsiaLand(lonDeg, latDeg - geoStep);
-          const ridge = Math.sin(lonDeg * 0.31 + Math.sin(latDeg * 0.19) * 2) *
-            Math.cos(latDeg * 0.42 - lonDeg * 0.12);
-          if (coast) bufs.struct[r][c] = solar > 0.05 ? ":" : ".";
-          else if (solar > 0.36) bufs.struct[r][c] = ridge > 0.32 ? "\u2592" : "\u2591";
-          else if (solar > 0.05) bufs.struct[r][c] = ridge > 0.32 ? "\u2591" : ":";
-          else if (solar > -0.18) bufs.struct[r][c] = ":";
-          else bufs.cool[r][c] = "\u00b7";
-        } else if (latLine && lonLine) {
-          bufs.cool[r][c] = "+";
-        } else if (latLine) {
-          bufs.cool[r][c] = "-";
-        } else if (lonLine) {
-          bufs.cool[r][c] = "\u00b7";
-        } else if (solar > 0.45 && hash2(Math.floor(lonDeg * 0.45), Math.floor(latDeg * 0.45)) > 0.74) {
-          bufs.cool[r][c] = "~";
+          if (coast) {
+            structRow[c] = solar > 0.05 ? ":" : ".";
+          } else if (solar > 0.05) {
+            const ridge = Math.sin(lonDeg * 0.31 + Math.sin(latDeg * 0.19) * 2) *
+              Math.cos(latDeg * 0.42 - lonDeg * 0.12);
+            if (solar > 0.36) structRow[c] = ridge > 0.32 ? "\u2592" : "\u2591";
+            else structRow[c] = ridge > 0.32 ? "\u2591" : ":";
+          } else if (solar > -0.18) {
+            structRow[c] = ":";
+          } else {
+            coolRow[c] = "\u00b7";
+          }
+        } else {
+          const latLine = Math.abs(((latDeg + 90) % gridDeg) - gridHalf) > gridThresh;
+          const lonLine = Math.abs((((lonDeg + 540) % gridDeg) - gridHalf)) > gridThresh;
+          if (latLine && lonLine) {
+            coolRow[c] = "+";
+          } else if (latLine) {
+            coolRow[c] = "-";
+          } else if (lonLine) {
+            coolRow[c] = "\u00b7";
+          } else if (solar > 0.45 && hash2(Math.floor(lonDeg * 0.45), Math.floor(latDeg * 0.45)) > 0.74) {
+            coolRow[c] = "~";
+          }
         }
       }
     }
@@ -1202,7 +1245,9 @@ z.48.1.eo.4
   function buffersToStrings(bufs) {
     const out = {};
     for (const name of LAYERS) {
-      out[name] = bufs[name].map((row) => row.join("")).join("\n");
+      out[name] = name === "grid" && bufs._gridStr
+        ? bufs._gridStr
+        : bufs[name].map((row) => row.join("")).join("\n");
     }
     return out;
   }
@@ -1246,8 +1291,12 @@ z.48.1.eo.4
       const onArrival = typeof options.onArrival === "function" ? options.onArrival : () => {};
       const narrowMedia = typeof matchMedia === "function" ? matchMedia("(max-width: 700px)") : { matches: false };
 
-      const wideBufs = makeBuffers(WIDE.cols, WIDE.rows);
-      const narrowBufs = makeBuffers(NARROW.cols, NARROW.rows);
+      let wideBufs = null;
+      let narrowBufs = null;
+      const getBufs = (spec) => {
+        if (spec === WIDE) return wideBufs || (wideBufs = makeBuffers(WIDE.cols, WIDE.rows));
+        return narrowBufs || (narrowBufs = makeBuffers(NARROW.cols, NARROW.rows));
+      };
 
       const getEl = (id) => document.getElementById(id);
       const stateTag = getEl("intro-state");
@@ -1255,19 +1304,29 @@ z.48.1.eo.4
       const progressText = getEl("intro-progress");
       const layerElements = new Map([WIDE, NARROW].map(spec =>
         [spec, LAYERS.map(name => getEl(`intro-${name}${spec.suffix}`))]));
+      const prevLayerText = new Map([WIDE, NARROW].map(spec =>
+        [spec, Array(LAYERS.length).fill(null)]));
 
       function writeToDom(spec, bufs) {
         const elements = layerElements.get(spec);
+        const prev = prevLayerText.get(spec);
         for (let i = 0; i < LAYERS.length; i++) {
           const name = LAYERS[i];
           const el = elements[i];
-          if (el) el.textContent = bufs[name].map((row) => row.join("")).join("\n");
+          if (!el) continue;
+          const next = name === "grid" && bufs._gridStr
+            ? bufs._gridStr
+            : bufs[name].map((row) => row.join("")).join("\n");
+          if (prev[i] !== next) {
+            prev[i] = next;
+            el.textContent = next;
+          }
         }
       }
 
       function updateTelemetry(t) {
         const info = phaseInfo(t, reduced);
-        if (root) root.dataset.phase = info.phase;
+        if (root && root.dataset.phase !== info.phase) root.dataset.phase = info.phase;
         if (stateTag && stateTag.textContent !== info.tag) stateTag.textContent = info.tag;
         if (rangeMeta && rangeMeta.textContent !== info.range) rangeMeta.textContent = info.range;
         if (progressText) {
@@ -1278,7 +1337,7 @@ z.48.1.eo.4
       }
 
       const initialSpec = narrowMedia.matches ? NARROW : WIDE;
-      const initialBufs = narrowMedia.matches ? narrowBufs : wideBufs;
+      const initialBufs = getBufs(initialSpec);
       renderFrame(initialBufs, initialSpec, 0, reduced);
       writeToDom(initialSpec, initialBufs);
       updateTelemetry(0);
@@ -1301,13 +1360,10 @@ z.48.1.eo.4
           lastNow = now;
           if (!reduced && now - lastPaint >= STEP_MS) {
             lastPaint = now;
-            if (narrowMedia.matches) {
-              renderFrame(narrowBufs, NARROW, elapsedSec, false);
-              writeToDom(NARROW, narrowBufs);
-            } else {
-              renderFrame(wideBufs, WIDE, elapsedSec, false);
-              writeToDom(WIDE, wideBufs);
-            }
+            const spec = narrowMedia.matches ? NARROW : WIDE;
+            const bufs = getBufs(spec);
+            renderFrame(bufs, spec, elapsedSec, false);
+            writeToDom(spec, bufs);
             updateTelemetry(elapsedSec);
           }
           if (elapsedSec >= targetDuration && !arrived) {
@@ -1324,7 +1380,7 @@ z.48.1.eo.4
       const onResizeMode = () => {
         if (disposed) return;
         const spec = narrowMedia.matches ? NARROW : WIDE;
-        const bufs = narrowMedia.matches ? narrowBufs : wideBufs;
+        const bufs = getBufs(spec);
         renderFrame(bufs, spec, elapsedSec, reduced);
         writeToDom(spec, bufs);
       };

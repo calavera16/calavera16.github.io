@@ -166,6 +166,7 @@ h1, h2 { margin: 0; font: inherit; font-weight: 600; }
   font-size: min(.60vw, 1vh, 7.7px);
   flex: 0 0 auto;
   isolation: isolate;
+  contain: layout style paint;
   user-select: none;
 }
 @supports (font-size: 1cqi) {
@@ -180,6 +181,7 @@ h1, h2 { margin: 0; font: inherit; font-weight: 600; }
   white-space: pre;
   font-kerning: none;
   font-variant-ligatures: none;
+  contain: layout style paint;
 }
 .intro-grid { color: #2d3833; }
 .intro-cool, .intro-warm, .intro-struct, .intro-signal, .intro-fx {
@@ -187,11 +189,11 @@ h1, h2 { margin: 0; font: inherit; font-weight: 600; }
   inset: 0;
   pointer-events: none;
 }
-.intro-cool { color: #5ca2b2; opacity: .88; text-shadow: 0 0 .55em rgb(63 122 133 / 30%); }
-.intro-warm { color: #d69a6c; opacity: .90; text-shadow: 0 0 .45em rgb(214 154 108 / 24%); }
-.intro-struct { color: #c4d4c9; text-shadow: 0 0 .35em rgb(155 181 166 / 20%); }
-.intro-signal { color: var(--signal); text-shadow: 0 0 .7em rgb(227 184 113 / 40%); }
-.intro-fx { color: #d2f4e8; text-shadow: 0 0 .8em rgb(191 230 216 / 52%); }
+.intro-cool { color: #64aec0; opacity: .90; }
+.intro-warm { color: #dda376; opacity: .92; }
+.intro-struct { color: #ccdcd1; }
+.intro-signal { color: var(--signal); text-shadow: 0 0 .55em rgb(227 184 113 / 36%); transform: translateZ(0); }
+.intro-fx { color: #d2f4e8; text-shadow: 0 0 .65em rgb(191 230 216 / 48%); transform: translateZ(0); }
 .intro-narrow { display: none; }
 .crt-scanlines {
   position: absolute;
