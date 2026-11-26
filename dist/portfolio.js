@@ -86,6 +86,7 @@
 
   const SCAN_PERIOD_MS = 18000;
   const FX_STEP_MS = 75; // ~13.3 Hz crisp character-cell terminal refresh cadence
+  const JACK_STEP_MS = 40; // ~25 Hz smooth ASCII shuffle without 144 Hz redraw overhead
   const SHUFFLE_CYCLE_MS = 4800;
 
   let held = false;
@@ -99,10 +100,21 @@
   let fxFrame = 0;
   let lastFrameNow = null;
   let lastPaintMs = -Infinity;
+  let lastJackPaintMs = -Infinity;
   let animElapsedMs = 0;
   let shuffleElapsedMs = 0;
   let skyCursorText = null;
   let pendingJump = null;
+  let lastReticleKey = null;
+  let cachedChartRect = null;
+  const fxLayerEls = {
+    wide: document.getElementById('map-fx'),
+    narrow: document.getElementById('map-fx-narrow'),
+  };
+  const reticleLayerEls = {
+    wide: document.getElementById('map-reticle'),
+    narrow: document.getElementById('map-reticle-narrow'),
+  };
   const SONAR_DURATION_MS = 900;
   const sonarPings = [];
 
@@ -936,8 +948,11 @@
       }
     }
 
-    const fxEl = document.getElementById(`map-fx${spec.suffix}`);
-    if (fxEl) fxEl.textContent = toText(grid);
+    const fxEl = fxLayerEls[spec.key] || document.getElementById(`map-fx${spec.suffix}`);
+    if (fxEl) {
+      const next = toText(grid);
+      if (fxEl.textContent !== next) fxEl.textContent = next;
+    }
   }
 
   function renderAllFx(elapsedMs, staticSnapshot = false) {
@@ -977,9 +992,15 @@
   }
 
   function renderReticles(targetId, locked) {
+    const key = `${targetId || ''}:${locked ? 1 : 0}`;
+    if (key === lastReticleKey) return;
+    lastReticleKey = key;
     for (const spec of [WIDE_SPEC, NARROW_SPEC]) {
-      const reticleEl = document.getElementById(`map-reticle${spec.suffix}`);
-      if (reticleEl) reticleEl.textContent = toText(drawReticle(spec, targetId, locked));
+      const reticleEl = reticleLayerEls[spec.key] || document.getElementById(`map-reticle${spec.suffix}`);
+      if (reticleEl) {
+        const next = toText(drawReticle(spec, targetId, locked));
+        if (reticleEl.textContent !== next) reticleEl.textContent = next;
+      }
     }
   }
 
@@ -1090,6 +1111,13 @@
     return Object.fromEntries(
       JACK_LAYER_NAMES.map(name => [name, Array.from({ length: JACK_ROWS }, () => Array(JACK_COLS).fill(' '))])
     );
+  }
+  const jackBufPool = makeJackBufs();
+  function clearJackBufs(bufs) {
+    for (const name of JACK_LAYER_NAMES) {
+      const grid = bufs[name];
+      for (let r = 0; r < JACK_ROWS; r++) grid[r].fill(' ');
+    }
   }
 
   function drawJackFace(bufs, id, pose, depth = 3, isFront = true) {
@@ -1204,7 +1232,8 @@
       return { id, pose, depth };
     });
 
-    const bufs = makeJackBufs();
+    clearJackBufs(jackBufPool);
+    const bufs = jackBufPool;
     faces.sort((a, b) => a.depth - b.depth);
     faces.forEach((face, idx) => drawJackFace(bufs, face.id, face.pose, idx, idx === faces.length - 1));
 
@@ -1260,8 +1289,10 @@
     if (!meta) return;
     const nextText = `TOP: J${meta.glyph} ${meta.name} // 0${handNum}/04`;
     if (jackSuitReadout.textContent !== nextText) jackSuitReadout.textContent = nextText;
-    jackSuitReadout.dataset.suitTone = meta.tone;
-    jackSuitReadout.setAttribute('data-suit-tone', meta.tone);
+    if (jackSuitReadout.dataset.suitTone !== meta.tone) {
+      jackSuitReadout.dataset.suitTone = meta.tone;
+      jackSuitReadout.setAttribute('data-suit-tone', meta.tone);
+    }
   }
 
   function cutJackDeck() {
@@ -1309,8 +1340,11 @@
     }
     if (shouldAnimateShuffle()) {
       shuffleElapsedMs += dt;
-      renderJackShuffle(shuffleElapsedMs, false);
-      updateJackIndicator(shuffleElapsedMs, false);
+      if (lastJackPaintMs === -Infinity || (dt > 0 && now - lastJackPaintMs >= JACK_STEP_MS)) {
+        lastJackPaintMs = now;
+        renderJackShuffle(shuffleElapsedMs, false);
+        updateJackIndicator(shuffleElapsedMs, false);
+      }
     }
     fxFrame = requestAnimationFrame(tickFx);
   }
@@ -1469,7 +1503,12 @@
 
   // Pointer hover and keyboard focus own separate tracking channels. A mouse
   // click's retained focus cannot leave a phantom tracking box after it exits.
-  document.addEventListener('pointerdown', () => { inputMode = 'pointer'; keyboardId = null; reflectInspector(); });
+  document.addEventListener('pointerdown', () => {
+    const changed = inputMode !== 'pointer' || keyboardId !== null;
+    inputMode = 'pointer';
+    keyboardId = null;
+    if (changed) reflectInspector();
+  });
   function bindTargetEvents(list, attr) {
     for (const link of list) {
       const id = link.dataset[attr];
@@ -1509,10 +1548,11 @@
   bindTargetEvents(navLinks, 'nav');
 
   // Star chart live sky cursor readout and empty-sky expanding ASCII sonar ping.
-  function chartCoordsFromEvent(event) {
+  function chartCoordsFromEvent(event, useCachedRect = false) {
     if (!chartScreen || typeof chartScreen.getBoundingClientRect !== 'function') return null;
-    const rect = chartScreen.getBoundingClientRect();
+    const rect = (useCachedRect && cachedChartRect) || chartScreen.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    if (useCachedRect) cachedChartRect = rect;
     if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') return null;
     const relX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     const relY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
@@ -1560,19 +1600,23 @@
       return;
     }
     if (sections.has(routeId()) || pointerId || keyboardId) return;
-    const coords = chartCoordsFromEvent(event);
+    const coords = chartCoordsFromEvent(event, true);
     if (!coords) return;
     skyCursorText = coords.readout;
-    if (cursorReadout) cursorReadout.textContent = skyCursorText;
+    if (cursorReadout && cursorReadout.textContent !== skyCursorText) cursorReadout.textContent = skyCursorText;
   });
 
   chartScreen?.addEventListener('pointerleave', event => {
+    cachedChartRect = null;
     if (event.pointerType === 'touch') return;
     if (skyCursorText !== null) {
       skyCursorText = null;
       reflectInspector();
     }
   });
+
+  window.addEventListener('resize', () => { cachedChartRect = null; }, { passive: true });
+  window.addEventListener('scroll', () => { cachedChartRect = null; }, { passive: true });
 
   chartScreen?.addEventListener('click', event => {
     if (event.defaultPrevented || event.pointerType === 'touch') return;
@@ -1948,9 +1992,11 @@
     });
     const activeKey = pairs.targets[currentIndex]?.dataset?.[pairs.attr];
     const activeBtn = pairs.buttons.find(b => (b.dataset.projectJump || b.dataset.researchJump) === activeKey) || pairs.buttons[0];
-    if (activeBtn) setActiveWaypoint(pairs.trackId, pairs.buttons, activeBtn);
+    if (activeBtn && activeBtn.getAttribute('aria-pressed') !== 'true') {
+      setActiveWaypoint(pairs.trackId, pairs.buttons, activeBtn);
+    }
   }
-  dossierPanel?.addEventListener('scroll', syncActiveWaypoint);
+  dossierPanel?.addEventListener('scroll', syncActiveWaypoint, { passive: true });
   window.addEventListener('scroll', syncActiveWaypoint, { passive: true });
 
   // About: click the shuffling Jack deck or [ CUT DECK ] button to deal/cut immediately to the next Jack.

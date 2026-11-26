@@ -1746,7 +1746,7 @@ test("Portfolio head includes OpenGraph/Twitter metadata, cache-busted CSS, and 
   assert.match(html, /<meta name="twitter:card" content="summary">/);
   assert.match(html, /<meta name="twitter:title" content="Yeon Jun Kim \/\/ Portfolio">/);
   assert.match(html, /<meta name="twitter:description" content="[^"]+Hallym University[^"]+">/);
-  assert.match(html, /href="portfolio\.css\?v=dossier-fluid-8"/);
+  assert.match(html, /href="portfolio\.css\?v=dossier-fluid-9"/);
   assert.match(html, /href="typography\.css\?v=site-type-1"/);
   assert.match(html, /src="portfolio\.js\?v=projects-1"/);
 

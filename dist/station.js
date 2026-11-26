@@ -136,19 +136,28 @@
       labels.join("") + "\n" + " ".repeat(Math.floor((width - caption.length) / 2)) + caption;
   }
 
+  let cachedSpectrumRect = null;
+  let lastProbeX = "";
+
   function spectrumProbeRect() {
+    if (cachedSpectrumRect && cachedSpectrumRect.width > 0) return cachedSpectrumRect;
     for (const candidate of [spectrumPlotWide, spectrumPlotNarrow, spectrumScroll]) {
       if (candidate && typeof candidate.getBoundingClientRect === "function") {
         const rect = candidate.getBoundingClientRect();
-        if (rect && rect.width > 0) return rect;
+        if (rect && rect.width > 0) {
+          cachedSpectrumRect = rect;
+          return rect;
+        }
       }
     }
     return null;
   }
 
   function resetSpectrumProbe() {
+    cachedSpectrumRect = null;
+    lastProbeX = "";
     if (spectrumProbe) {
-      spectrumProbe.textContent = DEFAULT_SPECTRUM_LABEL;
+      if (spectrumProbe.textContent !== DEFAULT_SPECTRUM_LABEL) spectrumProbe.textContent = DEFAULT_SPECTRUM_LABEL;
       spectrumProbe.classList?.remove("is-probing");
     }
     spectrumScroll?.classList?.remove("is-probing");
@@ -168,13 +177,17 @@
     const high = Math.min(64, Math.ceil(pos));
     const power = capturedPower[low] * (1 - (pos - low)) + capturedPower[high] * (pos - low);
     const db = -1.2 - (12 - power) * 1.65;
-    spectrumProbe.textContent = `PROBE ${sign}${magKhz.toFixed(1)} kHz // ${db.toFixed(1)} dB`;
+    const nextLabel = `PROBE ${sign}${magKhz.toFixed(1)} kHz // ${db.toFixed(1)} dB`;
+    if (spectrumProbe.textContent !== nextLabel) spectrumProbe.textContent = nextLabel;
     spectrumProbe.classList?.add("is-probing");
     spectrumScroll.classList?.add("is-probing");
-    if (spectrumScroll.style && typeof spectrumScroll.style.setProperty === "function") {
-      spectrumScroll.style.setProperty("--probe-x", `${(fraction * 100).toFixed(2)}%`);
+    const nextProbeX = `${(fraction * 100).toFixed(2)}%`;
+    if (nextProbeX !== lastProbeX && spectrumScroll.style && typeof spectrumScroll.style.setProperty === "function") {
+      lastProbeX = nextProbeX;
+      spectrumScroll.style.setProperty("--probe-x", nextProbeX);
     }
   }
+  window.addEventListener("resize", () => { cachedSpectrumRect = null; });
 
   configureReceiver();
   drawSpectrum();
