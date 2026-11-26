@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#141716" />
     <meta name="description" content="Yeon Jun Kim — Student portfolio. A transmission from deep space." />
+    <link rel="canonical" href="https://calavera16.github.io/" />
+    <meta property="og:title" content="Yeon Jun Kim // Transmission" />
+    <meta property="og:description" content="Yeon Jun Kim — Student portfolio. A transmission from deep space." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://calavera16.github.io/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Yeon Jun Kim // Transmission" />
+    <meta name="twitter:description" content="Yeon Jun Kim — Student portfolio. A transmission from deep space." />
     <title>Yeon Jun Kim // Transmission</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141716'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%23e3b871' stroke-width='2'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23e3b871'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="station.css?v=mobile-opt-a-2" />
+    <link rel="stylesheet" href="station.css?v=landing-craft-1" />
     <link rel="stylesheet" href="typography.css?v=site-type-1" />
     <script defer src="ascii-intro.js?v=mobile-opt-a-1"></script>
-    <script defer src="station.js?v=polished-1"></script>
+    <script defer src="station.js?v=landing-craft-1"></script>
   </head>
   <body data-stage="space">
     <main>
@@ -91,11 +99,11 @@
               </dl>
             </fieldset>
             <fieldset class="station-panel spectrum-panel"><legend>RF SPECTRUM</legend>
-              <div class="scope-meta"><span>RELATIVE POWER</span><span>CARRIER / 0 kHz</span></div>
-              <div class="spectrum-scroll" role="img" aria-label="Captured radio spectrum: a narrow carrier centered at zero kilohertz above a textured noise floor. Relative frequency offsets run from minus four to plus four kilohertz.">
-                <div class="spectrum-plot spectrum-wide" aria-hidden="true"><pre id="spectrum-grid"></pre><pre id="spectrum-trace"></pre></div>
+              <div class="scope-meta"><span>RELATIVE POWER</span><span id="spectrum-probe" class="scope-probe">CARRIER / 0 kHz</span></div>
+              <div id="spectrum-scroll" class="spectrum-scroll" role="img" aria-label="Captured radio spectrum: a narrow carrier centered at zero kilohertz above a textured noise floor. Relative frequency offsets run from minus four to plus four kilohertz.">
+                <div id="spectrum-plot-wide" class="spectrum-plot spectrum-wide" aria-hidden="true"><pre id="spectrum-grid"></pre><pre id="spectrum-trace"></pre></div>
                 <pre id="spectrum-axis" class="spectrum-axis spectrum-wide" aria-hidden="true"></pre>
-                <div class="spectrum-plot spectrum-narrow" aria-hidden="true"><pre id="spectrum-grid-narrow"></pre><pre id="spectrum-trace-narrow"></pre></div>
+                <div id="spectrum-plot-narrow" class="spectrum-plot spectrum-narrow" aria-hidden="true"><pre id="spectrum-grid-narrow"></pre><pre id="spectrum-trace-narrow"></pre></div>
                 <pre id="spectrum-axis-narrow" class="spectrum-axis spectrum-narrow" aria-hidden="true"></pre>
               </div>
             </fieldset>
@@ -114,13 +122,16 @@
         <div class="console-shell decoder-content" tabindex="-1">
           <header class="console-band"><span class="band-left"><span data-station-name>SEL / SEOUL RX</span><span class="band-mode"> // PAYLOAD DECODER</span></span><span class="band-session">SESSION <time data-session-utc>--:--:-- UTC</time></span></header>
           <div class="console-heading"><h2>Payload decoder</h2><span class="state-tag" id="decoder-state">DECODING</span></div>
-          <fieldset class="station-panel decode-panel"><legend>DECODE BUFFER</legend>
+          <fieldset id="decode-panel" class="station-panel decode-panel"><legend>DECODE BUFFER</legend>
             <p class="decode-source"><span data-payload-bytes>--</span> bytes / UTF-8 / 01 message</p>
             <p id="decode-buffer" aria-hidden="true"><span id="decode-settled"></span><span id="decode-scrambled"></span></p>
             <div class="progress-meta"><label for="decode-progress">Decoding transmission</label><output id="decode-percent" aria-live="off">0%</output></div>
             <pre id="decode-segments" aria-hidden="true">[                                ]</pre>
             <progress id="decode-progress" value="0" max="100">0%</progress>
-            <p id="decode-step" class="quiet-state" role="status">Reading receive buffer.</p>
+            <div class="decode-status-row">
+              <p id="decode-step" class="quiet-state" role="status">Reading receive buffer.</p>
+              <span id="decode-hint" class="decode-hint" aria-hidden="true"><span class="decode-hint-idle"><span class="key-hint">[ Space ] </span>Boost decode</span><span class="decode-hint-active">BOOST ACTIVE // 2.5x</span></span>
+            </div>
           </fieldset>
           <footer class="console-footer"><span>RECEIVED <time data-receive-utc>Awaiting capture</time></span><a id="decoder-portfolio-link" class="stay" href="portfolio.html">Open portfolio <span aria-hidden="true">&rarr;</span></a></footer>
         </div>

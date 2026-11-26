@@ -17,8 +17,16 @@
   const decodeStep = document.getElementById("decode-step");
   const decodeSettled = document.getElementById("decode-settled");
   const decodeScrambled = document.getElementById("decode-scrambled");
+  const decodePanel = document.getElementById("decode-panel");
+  const spectrumScroll = document.getElementById("spectrum-scroll");
+  const spectrumProbe = document.getElementById("spectrum-probe");
+  const spectrumPlotWide = document.getElementById("spectrum-plot-wide");
+  const spectrumPlotNarrow = document.getElementById("spectrum-plot-narrow");
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const stages = [space, terminal, decoder, message];
+  const DEFAULT_SPECTRUM_LABEL = "CARRIER / 0 kHz";
+  let decodeBoost = false;
+  const decodeRate = () => (decodeBoost ? 2.5 : 1);
 
   const quote = message.querySelector("blockquote").textContent.trim().replace(/\s+/g, " ");
   const payloadBytes = new TextEncoder().encode(quote).length;
@@ -89,17 +97,18 @@
     writeAll("[data-payload-bytes]", String(payloadBytes));
   }
 
-  // One fixed captured spectrum. Both layouts sample the same 65-bin capture.
+  // One fixed captured spectrum. Both layouts and the live probe sample the same 65-bin capture.
+  const capturedPower = Array.from({ length: 65 }, (_, bin) => {
+    const hash = Math.sin((bin + 17) * 127.1) * 43758.5453;
+    const noise = 1 + Math.floor((hash - Math.floor(hash)) * 3);
+    const offset = Math.abs(bin - 32);
+    const carrier = [12, 10, 7, 5, 3][offset] || 0;
+    return Math.max(noise, carrier);
+  });
+
   function drawSpectrum(width = 65, suffix = "") {
     const height = 13;
     const grid = [], trace = [];
-    const capturedPower = Array.from({ length: 65 }, (_, bin) => {
-      const hash = Math.sin((bin + 17) * 127.1) * 43758.5453;
-      const noise = 1 + Math.floor((hash - Math.floor(hash)) * 3);
-      const offset = Math.abs(bin - 32);
-      const carrier = [12, 10, 7, 5, 3][offset] || 0;
-      return Math.max(noise, carrier);
-    });
     for (let row = 0; row < height; row++) {
       let background = "", signal = "";
       for (let column = 0; column < width; column++) {
@@ -125,6 +134,46 @@
     const caption = "RELATIVE OFFSET / kHz";
     document.getElementById(`spectrum-axis${suffix}`).textContent =
       labels.join("") + "\n" + " ".repeat(Math.floor((width - caption.length) / 2)) + caption;
+  }
+
+  function spectrumProbeRect() {
+    for (const candidate of [spectrumPlotWide, spectrumPlotNarrow, spectrumScroll]) {
+      if (candidate && typeof candidate.getBoundingClientRect === "function") {
+        const rect = candidate.getBoundingClientRect();
+        if (rect && rect.width > 0) return rect;
+      }
+    }
+    return null;
+  }
+
+  function resetSpectrumProbe() {
+    if (spectrumProbe) {
+      spectrumProbe.textContent = DEFAULT_SPECTRUM_LABEL;
+      spectrumProbe.classList?.remove("is-probing");
+    }
+    spectrumScroll?.classList?.remove("is-probing");
+  }
+
+  function updateSpectrumProbe(event) {
+    if (!spectrumScroll || !spectrumProbe || document.body.dataset.stage !== "terminal") return;
+    if (event.pointerType === "touch" || typeof event.clientX !== "number") return;
+    const rect = spectrumProbeRect();
+    if (!rect || rect.width <= 0) return;
+    const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const rawKhz = fraction * 8 - 4;
+    const magKhz = Math.round(Math.abs(rawKhz) * 10) / 10;
+    const sign = rawKhz < 0 && magKhz > 0 ? "-" : "+";
+    const pos = fraction * 64;
+    const low = Math.floor(pos);
+    const high = Math.min(64, Math.ceil(pos));
+    const power = capturedPower[low] * (1 - (pos - low)) + capturedPower[high] * (pos - low);
+    const db = -1.2 - (12 - power) * 1.65;
+    spectrumProbe.textContent = `PROBE ${sign}${magKhz.toFixed(1)} kHz // ${db.toFixed(1)} dB`;
+    spectrumProbe.classList?.add("is-probing");
+    spectrumScroll.classList?.add("is-probing");
+    if (spectrumScroll.style && typeof spectrumScroll.style.setProperty === "function") {
+      spectrumScroll.style.setProperty("--probe-x", `${(fraction * 100).toFixed(2)}%`);
+    }
   }
 
   configureReceiver();
@@ -166,7 +215,28 @@
             ? "Decoding UTF-8 payload."
             : "Preparing message.";
     if (decodeStep.textContent !== step) decodeStep.textContent = step;
-    document.getElementById("decoder-state").textContent = value === 100 ? "COMPLETE" : "DECODING";
+    const state = document.getElementById("decoder-state");
+    const complete = value === 100;
+    state.textContent = complete ? "COMPLETE" : decodeBoost ? "DECODING // FAST" : "DECODING";
+    state.classList?.toggle("is-boosted", decodeBoost && !complete);
+    decodePanel?.classList?.toggle("is-boosted", decodeBoost && !complete);
+    decodePanel?.classList?.toggle("is-complete", complete);
+  }
+
+  function boostDecode() {
+    if (!run || document.body.dataset.stage !== "decoding" || decoder.hidden || decodeBoost || progress.value >= 100) return;
+    decodeBoost = true;
+    const state = document.getElementById("decoder-state");
+    if (state) {
+      state.textContent = "DECODING // FAST";
+      state.classList?.add("is-boosted");
+    }
+    decodePanel?.classList?.add("is-boosted");
+  }
+
+  function isInteractiveFocus(node) {
+    const tag = node?.tagName?.toUpperCase();
+    return tag === "A" || tag === "BUTTON" || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
   }
 
   function only(stage) {
@@ -188,7 +258,7 @@
   }
 
   // Count visible time so crossfades and decoding pause while the tab is hidden.
-  function visibleTime(duration, signal, update) {
+  function visibleTime(duration, signal, update, rate = null) {
     return new Promise((resolve) => {
       if (signal.aborted) return resolve(false);
       let frame = 0;
@@ -205,7 +275,7 @@
       function tick(now) {
         if (signal.aborted) return finish(false);
         if (!document.hidden) {
-          if (previous !== null) elapsed += Math.min(now - previous, 100);
+          if (previous !== null) elapsed += Math.min(now - previous, 100) * (rate ? rate() : 1);
           if (update) update(Math.min(elapsed / duration, 1), elapsed);
         }
         previous = document.hidden ? null : now;
@@ -235,6 +305,7 @@
 
   function openTerminal() {
     capture();
+    resetSpectrumProbe();
     only(terminal);
     terminal.scrollTop = 0;
     terminal.style.opacity = "1";
@@ -272,6 +343,8 @@
   async function decode() {
     if (!run || document.body.dataset.stage !== "terminal" || decodeButton.disabled) return;
     const signal = run.signal;
+    decodeBoost = false;
+    resetSpectrumProbe();
     receiveLog("Decoder started by operator.", utcNow());
     decodeButton.disabled = true;
     setStage("decoding");
@@ -287,14 +360,20 @@
     decoder.style.opacity = "1";
     decoder.querySelector(".decoder-content").focus({ preventScroll: true });
     if (
-      !(await visibleTime(motion.matches ? 950 : 3100, signal, (fraction, elapsed) => {
-        resetProgress(Math.min(99, Math.floor(fraction * 100)), elapsed);
-      }))
+      !(await visibleTime(
+        motion.matches ? 950 : 3100,
+        signal,
+        (fraction, elapsed) => {
+          resetProgress(Math.min(99, Math.floor(fraction * 100)), elapsed);
+        },
+        decodeRate,
+      ))
     )
       return;
     resetProgress(100);
     // Give 100% its own visible hold before opening the decoded message.
-    if (!(await visibleTime(1000, signal))) return;
+    if (!(await visibleTime(1000, signal, null, decodeRate))) return;
+    decodeBoost = false;
     if (
       !(await visibleTime(motion.matches ? 80 : 350, signal, (fraction) => {
         decoder.style.opacity = String(1 - fraction);
@@ -352,6 +431,8 @@
     writeAll("[data-session-utc]", sessionUTC);
     writeAll("[data-receive-utc]", "Awaiting capture");
     const signal = run.signal;
+    decodeBoost = false;
+    resetSpectrumProbe();
     document.getElementById("receive-log").replaceChildren();
     decodeButton.disabled = true;
     terminal.style.opacity = "0";
@@ -380,12 +461,30 @@
 
   portfolioLink.addEventListener("click", rememberMessage);
   skipButton.addEventListener("click", skipIntro);
+  if (spectrumScroll) {
+    spectrumScroll.addEventListener("pointermove", updateSpectrumProbe);
+    spectrumScroll.addEventListener("pointerleave", resetSpectrumProbe);
+    spectrumScroll.addEventListener("pointercancel", resetSpectrumProbe);
+  }
+  if (decodePanel) {
+    decodePanel.addEventListener("click", boostDecode);
+  }
   window.addEventListener("keydown", (event) => {
     if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const stage = document.body.dataset.stage;
     if (event.key === "Escape" && (stage === "space" || stage === "arrival") && run) {
       event.preventDefault();
       skipIntro();
+    } else if (
+      (event.key === " " || event.code === "Space") &&
+      stage === "decoding" &&
+      run &&
+      !decoder.hidden &&
+      progress.value < 100 &&
+      !isInteractiveFocus(document.activeElement)
+    ) {
+      event.preventDefault();
+      boostDecode();
     } else if (
       event.key === "Enter" &&
       stage === "message" &&

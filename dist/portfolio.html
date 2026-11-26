@@ -5,9 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#141716">
     <meta name="description" content="Yeon Jun Kim (Calavera), an undergraduate at Hallym University exploring computer science, AI, embedded systems, astronomy, physics, and creative projects.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Yeon Jun Kim // Portfolio">
+    <meta property="og:description" content="Yeon Jun Kim (Calavera), an undergraduate at Hallym University exploring computer science, AI, embedded systems, astronomy, physics, and creative projects.">
+    <meta property="og:url" content="https://calavera16.github.io/portfolio.html">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Yeon Jun Kim // Portfolio">
+    <meta name="twitter:description" content="Yeon Jun Kim (Calavera), an undergraduate at Hallym University exploring computer science, AI, embedded systems, astronomy, physics, and creative projects.">
     <title>Yeon Jun Kim // Star Chart</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23141716'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%23e3b871' stroke-width='2'/%3E%3Cpath d='M16 11 21 16 16 21 11 16Z' fill='%23e3b871'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="portfolio.css?v=dossier-fluid-4">
+    <link rel="stylesheet" href="portfolio.css?v=dossier-fluid-7">
     <link rel="stylesheet" href="typography.css?v=site-type-1" />
     <script defer src="portfolio.js?v=projects-1"></script>
   </head>
@@ -73,6 +80,12 @@
                     <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Projects and return to star chart">[ESC] Return to star chart</a>
                   </div>
                   <p class="record-meta">CAT // HD-01 &middot; SEC-A1 &middot; K2 III</p>
+                  <div class="dossier-telemetry" aria-label="Projects summary">
+                    <div class="telemetry-item"><span class="telemetry-num">05</span> <span class="telemetry-label">BUILDS</span></div>
+                    <div class="telemetry-item"><span class="telemetry-num">02</span> <span class="telemetry-label">HACKATHONS</span></div>
+                    <div class="telemetry-item"><span class="telemetry-num">03</span> <span class="telemetry-label">PERSONAL</span></div>
+                    <div class="telemetry-item"><span class="telemetry-num">03</span> <span class="telemetry-label">REPOS</span></div>
+                  </div>
                   <div class="dossier-filters waypoint-track" id="projects-filters" role="group" aria-label="Jump to project category">
                     <button type="button" class="filter-pill waypoint-btn" data-project-jump="hackathons" aria-pressed="true"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Hackathons</span><span class="waypoint-count">02</span></button>
                     <span class="waypoint-leg" aria-hidden="true"></span>
@@ -170,6 +183,12 @@
                     <a class="back-link" href="#map" aria-keyshortcuts="Escape" aria-label="Close Research and return to star chart">[ESC] Return to star chart</a>
                   </div>
                   <p class="record-meta">CAT // HD-02 &middot; SEC-C3 &middot; B3 V</p>
+                  <div class="dossier-telemetry" aria-label="Research summary">
+                    <div class="telemetry-item"><span class="telemetry-num">04</span> <span class="telemetry-label">PAPERS</span></div>
+                    <div class="telemetry-item"><span class="telemetry-num">03</span> <span class="telemetry-label">AWARDS</span></div>
+                    <div class="telemetry-item"><span class="telemetry-num">03</span> <span class="telemetry-label">TRACKS</span></div>
+                    <div class="telemetry-item"><span class="telemetry-num">02</span> <span class="telemetry-label">ROLES</span></div>
+                  </div>
                   <div class="dossier-filters waypoint-track" id="research-filters" role="group" aria-label="Jump to research category">
                     <button type="button" class="filter-pill waypoint-btn" data-research-jump="experience" aria-pressed="true"><span class="waypoint-node" aria-hidden="true"></span><span class="waypoint-label">Experience</span></button>
                     <span class="waypoint-leg" aria-hidden="true"></span>
@@ -325,8 +344,9 @@
                       <p class="record-body">CS student and generalist driven by curiosity. Embracing &#8220;jack of all trades, master of none&#8221;&mdash;my breadth lets me connect dots across disciplines.</p>
                       <p>Recent research started in biomedical signal processing and ML/DL, which gave me a strong research foundation, but it&rsquo;s only one suit in the hand. I enjoy diving into unfamiliar topics across AI, embedded hardware, physics, and astronomy, and seeing where curiosity leads.</p>
                     </div>
-                    <div class="jack-art">
-                      <div class="jack-stage" role="img" aria-label="Four Jack playing cards, one each of clubs, diamonds, hearts and spades, fanning and riffle shuffling in ASCII.">
+                    <div class="jack-deck-wrap">
+                      <div class="jack-art">
+                        <div class="jack-stage" role="img" aria-label="Four Jack playing cards, one each of clubs, diamonds, hearts and spades, fanning and riffle shuffling in ASCII.">
 <pre id="jack-back" class="jack-layer jack-layer-back" aria-hidden="true">                                                                                                
                                                                                                 
                                                                                                 
@@ -635,6 +655,11 @@
                                                                                                 
                                                                                                 
                                                                                                 </pre>
+                        </div>
+                      </div>
+                      <div class="jack-deck-bar">
+                        <span id="jack-suit-readout" class="jack-suit-readout">TOP: J&#9824; SPADES // 01/04</span>
+                        <button type="button" id="jack-cut-btn" class="jack-cut-btn" aria-label="Cut deck to next Jack">[ CUT DECK ]</button>
                       </div>
                     </div>
                   </div>
@@ -676,6 +701,8 @@
                     <span aria-hidden="true">&middot;</span>
                     <time id="seoul-clock">--:-- KST</time>
                     <span aria-hidden="true">&middot;</span>
+                    <span id="seoul-phase" class="seoul-phase">DAYTIME</span>
+                    <span aria-hidden="true">&middot;</span>
                     <span class="status-open">OPEN TO COLLAB</span>
                   </div>
                   <p class="record-body">Feel free to reach out about research ideas, hackathons, side projects, creative collaborations, or just to say hi.</p>
@@ -701,6 +728,12 @@
                       <div data-guide-channel="email"><dt>Email</dt><dd>Research ideas, collaborations, and direct notes</dd></div>
                       <div data-guide-channel="youtube"><dt>YouTube</dt><dd>Content creation, videos, and project demos</dd></div>
                     </dl>
+                    <div class="quick-mail-bar" id="quick-mail-bar" aria-label="Quick email topics">
+                      <span class="quick-mail-label">QUICK MAIL //</span>
+                      <a class="quick-mail-btn" data-mail-topic="Research" href="mailto:yeonjunkim70@gmail.com?subject=Research%20collaboration">Research</a>
+                      <a class="quick-mail-btn" data-mail-topic="Hackathon" href="mailto:yeonjunkim70@gmail.com?subject=Hackathon%20%2F%20project%20idea">Hackathon</a>
+                      <a class="quick-mail-btn" data-mail-topic="Say hi" href="mailto:yeonjunkim70@gmail.com?subject=Hello%20from%20your%20portfolio">Say hi</a>
+                    </div>
                   </article>
                 </section>
           </div>
@@ -750,8 +783,11 @@
             <span class="key-hint"><kbd>ENTER</kbd> OPEN</span>
             <span class="key-hint"><kbd>ESC</kbd> CHART</span>
             <span class="key-hint"><kbd>H</kbd> HOLD</span>
+            <span class="key-hint"><kbd>/</kbd> CMD</span>
           </div>
           <div class="instrument-controls" aria-label="Chart controls">
+            <button id="cmd-toggle" class="tui-btn" type="button" aria-keyshortcuts="/ Control+K" aria-label="Open command palette" title="Command palette (/ or Ctrl+K)" hidden><span class="btn-glyph" aria-hidden="true">/</span><span class="btn-label">CMD</span></button>
+            <button id="audio-toggle" class="tui-btn" type="button" aria-label="Enable console audio" title="Toggle console audio" aria-pressed="false" hidden><span class="btn-glyph" aria-hidden="true">~</span><span class="btn-label">AUDIO: OFF</span></button>
             <button id="sweep-toggle" class="tui-btn" type="button" aria-keyshortcuts="H" aria-label="Hold scan" title="Hold scan (H)" aria-pressed="false" hidden><span class="btn-glyph" aria-hidden="true">&#8545;</span><span class="btn-label">HOLD SCAN</span></button>
             <a class="replay tui-btn" href="index.html" aria-label="Replay transmission" title="Replay transmission"><span class="btn-glyph" aria-hidden="true">&#8630;</span><span class="btn-label">REPLAY RX</span></a>
           </div>
@@ -761,7 +797,12 @@
         <div class="media-lightbox-dialog">
           <div class="media-lightbox-head">
             <span class="media-lightbox-title" id="lightbox-title">MEDIA INSPECTOR // FULL RESOLUTION</span>
-            <button type="button" id="lightbox-close" class="media-lightbox-close" aria-keyshortcuts="Escape">[ESC] Close</button>
+            <div class="media-lightbox-actions">
+              <span id="lightbox-counter" class="media-lightbox-counter" hidden>01 / 01</span>
+              <button type="button" id="lightbox-prev" class="media-lightbox-nav" aria-label="Previous image" aria-keyshortcuts="ArrowLeft" hidden>[&larr; PREV]</button>
+              <button type="button" id="lightbox-next" class="media-lightbox-nav" aria-label="Next image" aria-keyshortcuts="ArrowRight" hidden>[NEXT &rarr;]</button>
+              <button type="button" id="lightbox-close" class="media-lightbox-close" aria-keyshortcuts="Escape">[ESC] Close</button>
+            </div>
           </div>
           <div class="media-lightbox-body">
             <img id="lightbox-img" src="" alt="">
@@ -769,6 +810,26 @@
               <p id="lightbox-caption" class="media-lightbox-caption"></p>
               <a id="lightbox-source" class="media-lightbox-source" href="" hidden>Open original &rarr;</a>
             </div>
+          </div>
+        </div>
+      </div>
+      <div id="cmd-palette" class="cmd-palette" role="dialog" aria-modal="true" aria-labelledby="cmd-palette-title" hidden>
+        <div class="cmd-palette-dialog">
+          <div class="cmd-palette-head">
+            <span class="cmd-palette-title" id="cmd-palette-title">OPERATOR COMMAND CONSOLE // SEL-RX</span>
+            <button type="button" id="cmd-close" class="cmd-palette-close" aria-keyshortcuts="Escape">[ESC] Close</button>
+          </div>
+          <div class="cmd-input-row">
+            <label class="cmd-prompt" for="cmd-input" aria-label="Command input">&gt;</label>
+            <input id="cmd-input" class="cmd-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type a command (projects, research, ping, cut, fortune, help)..." role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="cmd-list">
+          </div>
+          <ul id="cmd-list" class="cmd-list" role="listbox" aria-label="Available commands"></ul>
+          <div id="cmd-output" class="cmd-output" aria-live="polite" hidden></div>
+          <div class="cmd-palette-foot" aria-hidden="true">
+            <span class="key-hint"><kbd>&uarr;&darr;</kbd> SELECT</span>
+            <span class="key-hint"><kbd>ENTER</kbd> RUN</span>
+            <span class="key-hint"><kbd>ESC</kbd> CLOSE</span>
+            <span class="key-hint"><kbd>CTRL+K</kbd> TOGGLE</span>
           </div>
         </div>
       </div>

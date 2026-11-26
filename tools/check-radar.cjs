@@ -12,7 +12,7 @@ const css = fs.readFileSync("dist/portfolio.css", "utf8");
 const typography = fs.readFileSync("dist/typography.css", "utf8");
 const source = fs.readFileSync("dist/portfolio.js", "utf8");
 
-function harness({ hash = "", search = "", reducedMotion = false, compact = false, markup = html } = {}) {
+function harness({ hash = "", search = "", reducedMotion = false, compact = false, markup = html, extras = {} } = {}) {
   let document;
   const elements = [];
   class Element extends EventTarget {
@@ -153,6 +153,7 @@ function harness({ hash = "", search = "", reducedMotion = false, compact = fals
     performance: { now: () => now }, matchMedia: window.matchMedia,
     requestAnimationFrame(callback) { const id = ++nextId; frames.set(id, callback); return id; },
     cancelAnimationFrame: id => frames.delete(id),
+    ...extras,
   }, { filename: "dist/portfolio.js" });
   function event(target, type, properties = {}) {
     const ev = new Event(type, { cancelable: true, bubbles: true });
@@ -1532,4 +1533,710 @@ test("Audit polish regressions: no Contact wrap, Inspector flex pin, deduped Abo
   h.click(personalBtn);
   assert.equal(intoViews.length, 1, 'mobile document-flow waypoint jump scrolls page via scrollIntoView');
   assert.equal(intoViews[0].behavior, 'smooth');
+});
+
+test("Dossier telemetry strips display verified monospace counts directly under record-meta in Projects and Research", () => {
+  const h = harness();
+  const expected = [
+    ['projects', ['05 BUILDS', '02 HACKATHONS', '03 PERSONAL', '03 REPOS']],
+    ['research', ['04 PAPERS', '03 AWARDS', '03 TRACKS', '02 ROLES']],
+  ];
+  for (const [id, items] of expected) {
+    const section = h.id(id);
+    const meta = section.querySelector('.record-meta');
+    const strip = section.querySelector('.dossier-telemetry');
+    assert.ok(strip && strip.tagName === 'DIV', `#${id} has a div.dossier-telemetry strip`);
+    assert.ok(strip.getAttribute('aria-label'), `#${id} telemetry strip has an accessible label`);
+    const elementChildren = section.children.filter(node => typeof node !== 'string');
+    assert.equal(elementChildren.indexOf(strip), elementChildren.indexOf(meta) + 1, `#${id} telemetry strip sits directly below .record-meta`);
+    assert.equal(strip.querySelector('p'), null, 'telemetry strip uses no <p> tags');
+    assert.equal(strip.querySelector('cite'), null, 'telemetry strip uses no <cite> tags');
+    assert.equal(strip.querySelector('.record-body'), null, 'telemetry strip never hijacks .record-body');
+    const readings = h.select('.telemetry-item')
+      .filter(node => node.isDescendantOf(strip))
+      .map(node => node.textContent.replace(/\s+/g, ' ').trim());
+    assert.deepEqual(readings, items, `#${id} telemetry strip shows verified counts`);
+  }
+  assert.match(css, /\.dossier-telemetry\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(12ch,\s*1fr\)\)[^}]*background:\s*var\(--well\)/s);
+  assert.match(css, /\.telemetry-num\s*\{[^}]*color:\s*var\(--signal\)/s);
+  assert.match(css, /\.telemetry-label\s*\{[^}]*color:\s*var\(--muted\)[^}]*text-transform:\s*uppercase/s);
+});
+
+test("Lightbox gallery navigates within active dossier, supports ArrowLeft/ArrowRight, and hides controls for single-image view", () => {
+  const h = harness({ hash: '#projects' });
+  const lightbox = h.id('media-lightbox');
+  const counter = h.id('lightbox-counter');
+  const prevBtn = h.id('lightbox-prev');
+  const nextBtn = h.id('lightbox-next');
+  const img = h.id('lightbox-img');
+
+  // 1. Projects gallery: 5 items, buttons & arrows wrap cleanly, Escape restores original trigger focus.
+  const projectTriggers = h.select('.media-zoom-btn').filter(node => node.isDescendantOf(h.id('projects')));
+  assert.equal(projectTriggers.length, 5);
+  h.click(projectTriggers[0]);
+  assert.equal(lightbox.hidden, false);
+  assert.equal(counter.hidden, false);
+  assert.equal(prevBtn.hidden, false);
+  assert.equal(nextBtn.hidden, false);
+  assert.equal(counter.textContent, '01 / 05');
+  assert.equal(img.getAttribute('src'), 'media/signaltrace.webp');
+
+  h.click(nextBtn);
+  assert.equal(counter.textContent, '02 / 05');
+  assert.equal(img.getAttribute('src'), 'media/nasa-space-apps-certificate.webp');
+
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: 'ArrowLeft' }).defaultPrevented, true);
+  assert.equal(counter.textContent, '01 / 05');
+  assert.equal(img.getAttribute('src'), 'media/signaltrace.webp');
+
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: 'ArrowLeft' }).defaultPrevented, true);
+  assert.equal(counter.textContent, '05 / 05', 'ArrowLeft wraps from first item to last item');
+  assert.equal(img.getAttribute('src'), 'media/allowance-preview.webp');
+
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: 'ArrowRight' }).defaultPrevented, true);
+  assert.equal(counter.textContent, '01 / 05', 'ArrowRight wraps from last item to first item');
+  assert.equal(img.getAttribute('src'), 'media/signaltrace.webp');
+
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: 'Escape' }).defaultPrevented, true);
+  assert.equal(lightbox.hidden, true);
+  assert.equal(h.location.hash, '#projects', 'Escape closes lightbox without closing active dossier');
+  assert.equal(h.document.activeElement, projectTriggers[0], 'Escape restores focus to original trigger');
+
+  // 2. Research gallery: 7 items (4 paper pipelines + 3 award certificates), scoped exclusively to #research.
+  h.route('#research');
+  const firstPipeline = h.select('.paper-pipeline')[0];
+  h.click(firstPipeline);
+  assert.equal(counter.textContent, '01 / 07');
+  assert.equal(img.getAttribute('src'), 'media/paper-ippg-full-frame.png');
+  h.click(prevBtn);
+  assert.equal(counter.textContent, '07 / 07');
+  assert.equal(img.getAttribute('src'), 'media/ksdh-2025-poster-award.webp');
+  h.click(nextBtn);
+  assert.equal(counter.textContent, '01 / 07');
+  const fourthPipeline = h.select('.paper-pipeline')[3];
+  h.click(h.id('lightbox-close'));
+  h.click(fourthPipeline);
+  assert.equal(counter.textContent, '04 / 07');
+  h.click(nextBtn);
+  assert.equal(counter.textContent, '05 / 07');
+  assert.equal(img.getAttribute('src'), 'media/ksdh-2026-oral-award.webp');
+  h.click(h.id('lightbox-close'));
+
+  // 3. Single-image dossier hides counter, prev, and next controls.
+  let seenZoom = 0;
+  const singleImageHtml = html.replace(/<button type="button" class="media-zoom-btn"[^>]*>\[ \+ \]<\/button>/g, match => (++seenZoom === 1 ? match : ''));
+  const single = harness({ hash: '#projects', markup: singleImageHtml });
+  const onlyZoom = single.select('.media-zoom-btn').find(node => node.isDescendantOf(single.id('projects')));
+  single.click(onlyZoom);
+  assert.equal(single.id('media-lightbox').hidden, false);
+  assert.equal(single.id('lightbox-counter').hidden, true, 'single-image lightbox hides counter');
+  assert.equal(single.id('lightbox-prev').hidden, true, 'single-image lightbox hides prev button');
+  assert.equal(single.id('lightbox-next').hidden, true, 'single-image lightbox hides next button');
+});
+
+test("About Jack deck exposes sibling readout bar and [ CUT DECK ] button synced across live shuffle and reduced motion", () => {
+  const h = harness({ hash: '#about' });
+  const jackArt = h.select('.jack-art')[0];
+  const wrap = h.select('.jack-deck-wrap')[0];
+  const bar = h.select('.jack-deck-bar')[0];
+  const readout = h.id('jack-suit-readout');
+  const cutBtn = h.id('jack-cut-btn');
+  assert.ok(wrap && bar && readout && cutBtn);
+  assert.equal(jackArt.parentElement, wrap);
+  assert.equal(bar.parentElement, wrap);
+  assert.equal(bar.isDescendantOf(jackArt), false, '.jack-deck-bar sits outside .jack-art');
+  assert.equal(jackArt.querySelector('figcaption'), null);
+  assert.equal(readout.textContent, 'TOP: J\u2660 SPADES // 01/04');
+  assert.equal(readout.getAttribute('data-suit-tone'), 'cool');
+
+  // Live shuffle advances top-suit readout at riffle completion (p >= 0.76) and across all 4 hands.
+  h.frame(0);
+  advanceJack(h, 3700, 50); // p ~ 0.77 -> cycle 0 finished, Diamonds on top (02/04)
+  assert.equal(readout.textContent, 'TOP: J\u2666 DIAMONDS // 02/04');
+  assert.equal(readout.getAttribute('data-suit-tone'), 'gold');
+  advanceJack(h, 5900, 50); // t = 9600ms -> cycle 2, Clubs on top (03/04)
+  assert.equal(readout.textContent, 'TOP: J\u2663 CLUBS // 03/04');
+  assert.equal(readout.getAttribute('data-suit-tone'), 'mint');
+  advanceJack(h, 4800, 50); // t = 14400ms -> cycle 3, Hearts on top (04/04)
+  assert.equal(readout.textContent, 'TOP: J\u2665 HEARTS // 04/04');
+  assert.equal(readout.getAttribute('data-suit-tone'), 'warm');
+
+  // Clicking [ CUT DECK ] cuts immediately and logs to telemetry.
+  const before = h.id('jack-front').textContent;
+  h.click(cutBtn);
+  assert.notEqual(h.id('jack-front').textContent, before);
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /DECK CUT -> NEXT JACK\./);
+
+  // Reduced motion keeps RAF off while [ CUT DECK ] cycles all 4 hands cleanly.
+  const reduced = harness({ hash: '#about', reducedMotion: true });
+  const rReadout = reduced.id('jack-suit-readout');
+  const rCut = reduced.id('jack-cut-btn');
+  assert.equal(rReadout.textContent, 'TOP: J\u2660 SPADES // 01/04');
+  reduced.click(rCut);
+  assert.equal(rReadout.textContent, 'TOP: J\u2666 DIAMONDS // 02/04');
+  reduced.click(rCut);
+  assert.equal(rReadout.textContent, 'TOP: J\u2663 CLUBS // 03/04');
+  reduced.click(rCut);
+  assert.equal(rReadout.textContent, 'TOP: J\u2665 HEARTS // 04/04');
+  reduced.click(rCut);
+  assert.equal(rReadout.textContent, 'TOP: J\u2660 SPADES // 01/04');
+  assert.equal(reduced.frames.size, 0, 'reduced-motion deck cuts never schedule RAF');
+
+  const mobileBlock = css.slice(css.indexOf('@media (max-width: 700px)'));
+  assert.match(mobileBlock, /\.jack-deck-wrap\s*\{\s*justify-self:\s*center;\s*\}/);
+});
+
+test("Contact shows Seoul time-of-day phase badge alongside HH:MM KST and topic quick-mail bar synced with email channel", () => {
+  const RealDate = Date;
+  const withFixedTime = iso => {
+    const fixedMs = RealDate.parse(iso);
+    class FixedDate extends RealDate {
+      constructor(...args) { super(...(args.length ? args : [fixedMs])); }
+      static now() { return fixedMs; }
+    }
+    return harness({ hash: '#contact', extras: { Date: FixedDate } });
+  };
+  for (const [iso, expectedClock, expectedPhase, expectedTone] of [
+    ['2026-05-01T00:15:00Z', '09:15 KST', 'DAYTIME', 'day'],
+    ['2026-05-01T10:30:00Z', '19:30 KST', 'EVENING', 'evening'],
+    ['2026-05-01T14:10:00Z', '23:10 KST', 'LATE NIGHT', 'night'],
+    ['2026-05-01T15:05:00Z', '00:05 KST', 'LATE NIGHT', 'night'],
+  ]) {
+    const timed = withFixedTime(iso);
+    assert.equal(timed.id('seoul-clock').textContent, expectedClock);
+    assert.equal(timed.id('seoul-phase').textContent, expectedPhase);
+    assert.equal(timed.id('seoul-phase').getAttribute('data-phase'), expectedTone);
+  }
+
+  const h = harness({ hash: '#contact' });
+  const quickBar = h.id('quick-mail-bar');
+  const guide = h.select('.channel-guide')[0];
+  const card = h.select('.contact-card')[0];
+  assert.ok(quickBar && quickBar.parentElement === card);
+  assert.ok(card.children.indexOf(quickBar) > card.children.indexOf(guide), 'quick-mail bar sits below .channel-guide');
+  assert.equal(quickBar.isDescendantOf(h.id('contact-links')), false, 'quick-mail bar never modifies #contact-links');
+  assert.equal(quickBar.hidden, false);
+  const buttons = h.select('.quick-mail-btn');
+  assert.equal(buttons.length, 3);
+  assert.deepEqual(buttons.map(btn => btn.dataset.mailTopic), ['Research', 'Hackathon', 'Say hi']);
+  assert.ok(buttons.every(btn => btn.getAttribute('data-contact-channel') === null));
+  assert.deepEqual(buttons.map(btn => btn.href), [
+    'mailto:yeonjunkim70@gmail.com?subject=Research%20collaboration',
+    'mailto:yeonjunkim70@gmail.com?subject=Hackathon%20%2F%20project%20idea',
+    'mailto:yeonjunkim70@gmail.com?subject=Hello%20from%20your%20portfolio',
+  ]);
+  for (const btn of buttons) {
+    assert.equal(h.click(btn).defaultPrevented, false, 'quick-mail keeps native mailto navigation');
+    assert.match(h.id('telemetry-log').children.at(-1).textContent, new RegExp(`MAIL DRAFT -> ${btn.dataset.mailTopic.toUpperCase()}`));
+  }
+
+  // Empty email channel hides #quick-mail-bar; custom email syncs base address.
+  const unset = harness({ hash: '#contact', markup: contactFixture({}) });
+  assert.equal(unset.id('quick-mail-bar').hidden, true, 'quick-mail bar hides when email channel is unset');
+  const custom = harness({ hash: '#contact', markup: contactFixture({ email: 'mailto:custom@example.test' }) });
+  assert.equal(custom.id('quick-mail-bar').hidden, false);
+  assert.ok(custom.select('.quick-mail-btn').every(btn => btn.href.startsWith('mailto:custom@example.test?subject=')));
+});
+
+test("Portfolio head includes OpenGraph/Twitter metadata, cache-busted CSS, and safe @media print stylesheet", () => {
+  assert.match(html, /<meta property="og:type" content="website">/);
+  assert.match(html, /<meta property="og:title" content="Yeon Jun Kim \/\/ Portfolio">/);
+  assert.match(html, /<meta property="og:description" content="[^"]+Hallym University[^"]+">/);
+  assert.match(html, /<meta property="og:url" content="https:\/\/calavera16\.github\.io\/portfolio\.html">/);
+  assert.match(html, /<meta name="twitter:card" content="summary">/);
+  assert.match(html, /<meta name="twitter:title" content="Yeon Jun Kim \/\/ Portfolio">/);
+  assert.match(html, /<meta name="twitter:description" content="[^"]+Hallym University[^"]+">/);
+  assert.match(html, /href="portfolio\.css\?v=dossier-fluid-7"/);
+  assert.match(html, /href="typography\.css\?v=site-type-1"/);
+  assert.match(html, /src="portfolio\.js\?v=projects-1"/);
+
+  const printStart = css.lastIndexOf('@media print');
+  assert.ok(printStart > css.indexOf('@media (prefers-reduced-motion: reduce)'), '@media print is appended at EOF');
+  const printBlock = css.slice(printStart);
+  assert.match(printBlock, /background:\s*#fff/);
+  assert.match(printBlock, /color:\s*#111/);
+  for (const hiddenSel of [
+    '.chart-panel', '.side-stack', '.console-footer', '.dossier-filters', '.back-link',
+    '.media-zoom-btn', '.copy-email-btn', '.jack-deck-bar', '.quick-mail-bar',
+    '.media-lightbox', '.cmd-palette', '.crt-scanlines',
+  ]) {
+    assert.ok(printBlock.includes(hiddenSel), `@media print hides ${hiddenSel}`);
+  }
+  assert.match(printBlock, /body \.dossier-panel\s*\{[^}]*display:\s*block !important;[^}]*overflow:\s*visible !important/s);
+  assert.match(printBlock, /body \.destination\s*\{[^}]*display:\s*block !important/s);
+});
+
+test("Command Palette opens via /, Ctrl+K, Cmd+K or footer button, ranks autocomplete, and enforces 3-tier Escape priority", () => {
+  const h = harness();
+  const palette = h.id('cmd-palette');
+  const cmdToggle = h.id('cmd-toggle');
+  const cmdInput = h.id('cmd-input');
+  const cmdList = h.id('cmd-list');
+  const cmdOutput = h.id('cmd-output');
+  const cmdClose = h.id('cmd-close');
+
+  assert.ok(palette && cmdToggle && cmdInput && cmdList && cmdOutput && cmdClose);
+  assert.equal(palette.hidden, true, 'palette starts hidden');
+  assert.equal(cmdToggle.hidden, false, 'footer CMD button is unhidden by JS');
+  assert.match(html, /<span class="key-hint"><kbd>\/<\/kbd> CMD<\/span>/);
+
+  // Opening via '/' from chart focuses input and populates all 23 commands.
+  h.document.body.focus();
+  assert.equal(h.event(h.document, 'keydown', { key: '/' }).defaultPrevented, true);
+  assert.equal(palette.hidden, false);
+  assert.equal(h.document.activeElement, cmdInput);
+  assert.equal(cmdList.children.length, 23);
+  assert.equal(cmdList.children[0].dataset.cmdId, 'projects');
+  assert.equal(cmdList.children[0].classList.contains('is-selected'), true);
+
+  // Typing '1' or 'h' while palette is open must not trigger chart shortcuts.
+  assert.equal(h.event(cmdInput, 'keydown', { key: '1' }).defaultPrevented, false);
+  assert.equal(h.location.hash, '');
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'h' }).defaultPrevented, false);
+  assert.equal(h.id('map').dataset.sweep, 'running');
+
+  // ArrowDown / ArrowUp cycle cleanly with wrapping.
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'ArrowDown' }).defaultPrevented, true);
+  assert.equal(cmdList.children[1].classList.contains('is-selected'), true);
+  assert.equal(cmdList.children[0].classList.contains('is-selected'), false);
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'ArrowUp' }).defaultPrevented, true);
+  assert.equal(cmdList.children[0].classList.contains('is-selected'), true);
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'ArrowUp' }).defaultPrevented, true);
+  assert.equal(cmdList.children[22].classList.contains('is-selected'), true, 'ArrowUp wraps to last command');
+
+  // Fuzzy / alias / prefix ranking.
+  const typeQuery = value => {
+    cmdInput.value = value;
+    h.event(cmdInput, 'input');
+    return cmdList.children.map(node => node.dataset.cmdId).filter(Boolean);
+  };
+  assert.equal(typeQuery('map')[0], 'chart', 'exact alias map ranks chart first');
+  assert.equal(typeQuery('res')[0], 'research', 'prefix res ranks research first');
+  assert.equal(typeQuery('prj')[0], 'projects', 'ordered subsequence prj matches projects');
+  assert.equal(typeQuery('ftn')[0], 'fortune', 'ordered subsequence ftn matches fortune');
+  assert.equal(typeQuery('zzzz_unknown_cmd').length, 0, 'unmatched query renders empty state');
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'Enter' }).defaultPrevented, true);
+  assert.equal(cmdOutput.hidden, false);
+  assert.match(cmdOutput.textContent, /UNKNOWN COMMAND/);
+
+  // Escape closes palette and restores focus to trigger; Ctrl+K and Cmd+K toggle cleanly.
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'Escape' }).defaultPrevented, true);
+  assert.equal(palette.hidden, true);
+  assert.equal(h.document.activeElement, h.document.body);
+
+  assert.equal(h.event(h.document, 'keydown', { key: 'k', ctrlKey: true }).defaultPrevented, true);
+  assert.equal(palette.hidden, false);
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'k', metaKey: true }).defaultPrevented, true);
+  assert.equal(palette.hidden, true);
+
+  // Clicking footer CMD button opens palette and Escape restores focus to CMD button.
+  h.click(cmdToggle);
+  assert.equal(palette.hidden, false);
+  h.event(cmdInput, 'keydown', { key: 'Escape' });
+  assert.equal(palette.hidden, true);
+  assert.equal(h.document.activeElement, cmdToggle);
+
+  // External editable controls stay untouched when palette is closed (including '/').
+  const extInput = { tagName: 'INPUT' };
+  h.document.activeElement = extInput;
+  assert.equal(h.event(h.document, 'keydown', { key: '/' }).defaultPrevented, false);
+  assert.equal(palette.hidden, true);
+
+  // 3-tier Escape priority: Command Palette -> Lightbox -> Dossier!
+  h.route('#projects');
+  const zoomBtn = h.select('.media-zoom-btn')[0];
+  h.click(zoomBtn);
+  assert.equal(h.id('media-lightbox').hidden, false);
+  // '/' does not open while lightbox is open, while Ctrl+K opens over lightbox.
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: '/' }).defaultPrevented, false);
+  assert.equal(palette.hidden, true);
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: 'k', ctrlKey: true }).defaultPrevented, true);
+  assert.equal(palette.hidden, false);
+
+  // 1st Escape: closes Command Palette ONLY.
+  assert.equal(h.event(cmdInput, 'keydown', { key: 'Escape' }).defaultPrevented, true);
+  assert.equal(palette.hidden, true);
+  assert.equal(h.id('media-lightbox').hidden, false, 'lightbox stays open after closing command palette');
+  assert.equal(h.location.hash, '#projects', 'dossier stays open after closing command palette');
+  assert.equal(h.document.activeElement, h.id('lightbox-close'));
+
+  // 2nd Escape: closes Lightbox ONLY.
+  assert.equal(h.event(h.id('lightbox-close'), 'keydown', { key: 'Escape' }).defaultPrevented, true);
+  assert.equal(h.id('media-lightbox').hidden, true);
+  assert.equal(h.location.hash, '#projects', 'dossier stays open after closing lightbox');
+
+  // 3rd Escape: closes Dossier back to #map.
+  assert.equal(h.event(zoomBtn, 'keydown', { key: 'Escape' }).defaultPrevented, true);
+  assert.equal(h.location.hash, '#map');
+});
+
+test("Command Palette executes all 23 professional and fun commands with verified facts", () => {
+  const copied = [];
+  const opened = [];
+  const h = harness({
+    extras: {
+      navigator: { clipboard: { writeText: text => { copied.push(text); return Promise.resolve(); } } },
+    },
+  });
+  h.window.open = (url, target, features) => { opened.push({ url, target, features }); };
+
+  const palette = h.id('cmd-palette');
+  const cmdInput = h.id('cmd-input');
+  const cmdOutput = h.id('cmd-output');
+  const runCmd = query => {
+    if (palette.hidden) h.click(h.id('cmd-toggle'));
+    cmdInput.value = query;
+    h.event(cmdInput, 'input');
+    h.event(cmdInput, 'keydown', { key: 'Enter' });
+  };
+
+  // Section navigation commands.
+  runCmd('projects');
+  assert.equal(palette.hidden, true);
+  assert.equal(h.location.hash, '#projects');
+  runCmd('research');
+  assert.equal(h.location.hash, '#research');
+  runCmd('about');
+  assert.equal(h.location.hash, '#about');
+  runCmd('contact');
+  assert.equal(h.location.hash, '#contact');
+  runCmd('home');
+  assert.equal(h.location.hash, '#map');
+
+  // Deep waypoint jump commands.
+  runCmd('personal');
+  assert.equal(h.location.hash, '#projects');
+  assert.equal(h.select('[data-project-jump]').find(b => b.dataset.projectJump === 'personal').getAttribute('aria-pressed'), 'true');
+  runCmd('hackathons');
+  assert.equal(h.select('[data-project-jump]').find(b => b.dataset.projectJump === 'hackathons').getAttribute('aria-pressed'), 'true');
+  for (const section of ['ippg', 'sleep', 'stress', 'awards']) {
+    runCmd(section);
+    assert.equal(h.location.hash, '#research');
+    assert.equal(h.select('[data-research-jump]').find(b => b.dataset.researchJump === section).getAttribute('aria-pressed'), 'true');
+  }
+  assert.equal(h.select('.paper-cite').length, 0, 'Research papers have no BibTeX copier blocks');
+
+  // Channels & info commands.
+  runCmd('email');
+  assert.equal(copied.at(-1), 'yeonjunkim70@gmail.com');
+  assert.equal(cmdOutput.hidden, false);
+  assert.match(cmdOutput.textContent, /yeonjunkim70@gmail\.com/);
+
+  runCmd('github');
+  runCmd('youtube');
+  runCmd('instagram');
+  assert.deepEqual(opened.map(entry => entry.url), [
+    'https://github.com/calavera16',
+    'https://www.youtube.com/@calavera6712',
+    'https://www.instagram.com/yj_07_25',
+  ]);
+  assert.ok(opened.every(entry => entry.target === '_blank' && entry.features === 'noopener'));
+
+  runCmd('help');
+  assert.match(cmdOutput.textContent, /projects/);
+  assert.match(cmdOutput.textContent, /fortune/);
+
+  // Fun commands: whoami, seoul, sound, scan, fortune, ping (in dossier vs chart), cut.
+  runCmd('whoami');
+  assert.match(cmdOutput.textContent, /YEON JUN KIM \(CALAVERA\) \/\/ HALLYM UNIV\. CS/);
+  assert.match(cmdOutput.textContent, /INDEPENDENT UNDERGRADUATE RESEARCHER/);
+
+  runCmd('seoul');
+  assert.match(cmdOutput.textContent, /SEL \/\/ SEOUL · \d{2}:\d{2} KST · (DAYTIME|EVENING|LATE NIGHT)/);
+
+  runCmd('sound');
+  assert.equal(h.id('audio-toggle').getAttribute('aria-pressed'), 'true');
+  assert.match(cmdOutput.textContent, /AUDIO SYNTH \/\/ ON/);
+  runCmd('mute');
+  assert.equal(h.id('audio-toggle').getAttribute('aria-pressed'), 'false');
+  assert.match(cmdOutput.textContent, /AUDIO SYNTH \/\/ OFF/);
+
+  // Ping inside dossier gives inline PONG and never schedules RAF.
+  assert.equal(h.frames.size, 0);
+  runCmd('ping');
+  assert.match(cmdOutput.textContent, /PONG \/\/ SEL-RX ONLINE/);
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /SONAR PING -> SEL-RX PONG/);
+  assert.equal(h.frames.size, 0, 'ping in dossier never schedules RAF');
+
+  // Fortune rotates through all 5 entries including verified transmission quote.
+  const fortunes = [];
+  for (let i = 0; i < 6; i++) {
+    runCmd('fortune');
+    fortunes.push(cmdOutput.textContent);
+  }
+  assert.match(fortunes[0], /Explore\. Dream\. Discover\./);
+  assert.equal(new Set(fortunes.slice(0, 5)).size, 5, 'five distinct domain-neutral fortunes');
+  assert.equal(fortunes[5], fortunes[0], 'fortunes wrap cleanly after five entries');
+
+  // Cut navigates to #about and immediately advances the ASCII Jack deck.
+  const beforeCut = h.id('jack-front').textContent;
+  runCmd('cut');
+  assert.equal(h.location.hash, '#about');
+  assert.notEqual(h.id('jack-front').textContent, beforeCut);
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /DECK CUT -> NEXT JACK\./);
+
+  // Scan toggles sweep hold and chart ping spawns an ASCII sonar ripple on #map-fx.
+  runCmd('chart');
+  h.event(h.window, 'hashchange');
+  assert.equal(h.id('map').dataset.sweep, 'running');
+  runCmd('scan');
+  assert.equal(h.id('map').dataset.sweep, 'held');
+  assert.equal(h.frames.size, 0);
+  runCmd('scan');
+  assert.equal(h.id('map').dataset.sweep, 'running');
+  assert.equal(h.frames.size, 1);
+
+  const idleFx = h.id('map-fx').textContent;
+  runCmd('ping');
+  assert.equal(palette.hidden, true, 'chart ping closes palette to reveal sonar ring');
+  assert.notEqual(h.id('map-fx').textContent, idleFx, 'chart ping paints sonar burst onto #map-fx');
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /SONAR PING -> SEL-RX PONG/);
+});
+
+test("Optional Web Audio TUI synthesizer stays OFF by default, obeys <=0.04 gain / <=180ms duration, and no-ops safely in Node", () => {
+  const createdContexts = [];
+  const playedTones = [];
+  class MockAudioContext {
+    constructor() {
+      this.currentTime = 1.0;
+      this.state = 'running';
+      this.destination = { id: 'dest' };
+      createdContexts.push(this);
+    }
+    createOscillator() {
+      const tone = { type: 'sine', freq: 0, startTime: 0, stopTime: 0, peakGain: 0 };
+      playedTones.push(tone);
+      return {
+        set type(v) { tone.type = v; },
+        get type() { return tone.type; },
+        frequency: {
+          setValueAtTime(v) { tone.freq = v; },
+          exponentialRampToValueAtTime(v) { tone.endFreq = v; },
+        },
+        connect(gainNode) { gainNode._tone = tone; },
+        start(t) { tone.startTime = t; },
+        stop(t) { tone.stopTime = t; },
+      };
+    }
+    createGain() {
+      const node = {
+        _tone: null,
+        gain: {
+          setValueAtTime(v) { if (node._tone && v > node._tone.peakGain) node._tone.peakGain = v; node._pendingPeak = Math.max(node._pendingPeak || 0, v); },
+          linearRampToValueAtTime(v) { node._pendingPeak = Math.max(node._pendingPeak || 0, v); if (node._tone) node._tone.peakGain = Math.max(node._tone.peakGain, v); },
+          exponentialRampToValueAtTime() {},
+        },
+        connect() { if (node._tone && node._pendingPeak) node._tone.peakGain = Math.max(node._tone.peakGain, node._pendingPeak); },
+      };
+      return node;
+    }
+  }
+
+  const h = harness();
+  h.window.AudioContext = MockAudioContext;
+  const audioBtn = h.id('audio-toggle');
+  assert.ok(audioBtn);
+  assert.equal(audioBtn.hidden, false);
+  assert.equal(audioBtn.getAttribute('aria-pressed'), 'false');
+  assert.equal(audioBtn.querySelector('.btn-label').textContent, 'AUDIO: OFF');
+
+  // While OFF, route locks, deck cuts, tag chips, email copy, and sonar pings stay 100% silent.
+  h.event(h.select('.chart-screen')[0], 'click', { clientX: 300, clientY: 300 });
+  h.route('#research');
+  h.route('#about');
+  h.click(h.id('jack-cut-btn'));
+  h.click(h.select('.tag-chip')[0]);
+  h.route('#contact');
+  h.click(h.id('copy-email-btn'));
+  assert.equal(createdContexts.length, 0, 'AudioContext is never instantiated while AUDIO: OFF');
+  assert.equal(playedTones.length, 0, 'zero oscillators fire while AUDIO: OFF');
+
+  // Enable audio -> lazy AudioContext creation + gentle confirmation click.
+  h.click(audioBtn);
+  assert.equal(audioBtn.getAttribute('aria-pressed'), 'true');
+  assert.equal(audioBtn.querySelector('.btn-label').textContent, 'AUDIO: ON');
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /AUDIO SYNTH -> ON/);
+  assert.equal(createdContexts.length, 1);
+  assert.ok(playedTones.length >= 1);
+
+  // Fire lock, cut, ping, and click voices and verify strict gain <= 0.04 & duration <= 180ms (+5ms stop tail).
+  const beforeVoices = playedTones.length;
+  h.route('#about');
+  h.click(h.id('jack-cut-btn'));
+  h.route('#map');
+  h.event(h.select('.chart-screen')[0], 'click', { clientX: 300, clientY: 300 });
+  assert.ok(playedTones.length > beforeVoices + 4, 'lock, cut, and sonar ping synthesize distinct voices');
+  for (const tone of playedTones) {
+    assert.ok(tone.peakGain > 0 && tone.peakGain <= 0.04, `tone gain (${tone.peakGain}) stays <= 0.04`);
+    assert.ok(tone.stopTime - tone.startTime <= 0.19, `tone duration (${(tone.stopTime - tone.startTime).toFixed(3)}s) stays <= 180ms`);
+  }
+
+  // Disable audio -> silent again.
+  h.click(audioBtn);
+  assert.equal(audioBtn.getAttribute('aria-pressed'), 'false');
+  assert.equal(audioBtn.querySelector('.btn-label').textContent, 'AUDIO: OFF');
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /AUDIO SYNTH -> OFF/);
+  const countWhenMuted = playedTones.length;
+  h.route('#projects');
+  assert.equal(playedTones.length, countWhenMuted, 'muting stops all synthesizer output');
+
+  // Bare Node sandbox (no AudioContext) toggles cleanly without throwing.
+  const bare = harness();
+  bare.click(bare.id('audio-toggle'));
+  assert.equal(bare.id('audio-toggle').getAttribute('aria-pressed'), 'true');
+  bare.route('#projects');
+  bare.click(bare.id('audio-toggle'));
+  assert.equal(bare.id('audio-toggle').getAttribute('aria-pressed'), 'false');
+});
+
+test("Star chart displays live sky cursor coordinates in standby and emits expanding ASCII sonar pings on empty-sky clicks", () => {
+  const h = harness();
+  const screen = h.select('.chart-screen')[0];
+  const readout = h.id('cursor-readout');
+  assert.match(css, /\.chart-screen\s*\{[^}]*cursor:\s*crosshair/s);
+  assert.equal(readout.textContent, 'LOCK: STANDBY // 04 CONTACTS');
+
+  // Touch pointermove is ignored and preserves standby readout.
+  h.event(screen, 'pointermove', { pointerType: 'touch', clientX: 300, clientY: 300 });
+  assert.equal(readout.textContent, 'LOCK: STANDBY // 04 CONTACTS');
+
+  // Mouse pointermove updates live RA/DEC sky cursor readout across corners and center.
+  h.event(screen, 'pointermove', { pointerType: 'mouse', clientX: 300, clientY: 300 });
+  assert.equal(readout.textContent, 'SKY CURSOR // RA 12h00m / DEC +00\u00b0');
+  h.event(screen, 'pointermove', { pointerType: 'mouse', clientX: 0, clientY: 0 });
+  assert.equal(readout.textContent, 'SKY CURSOR // RA 00h00m / DEC +60\u00b0');
+  h.event(screen, 'pointermove', { pointerType: 'mouse', clientX: 600, clientY: 600 });
+  assert.equal(readout.textContent, 'SKY CURSOR // RA 23h59m / DEC -60\u00b0');
+
+  // Hovering a beacon overrides sky cursor cleanly; leaving chart restores standby readout.
+  const projectsStar = h.select('.star-link')[0];
+  h.event(projectsStar, 'pointerenter', { pointerType: 'mouse' });
+  assert.match(readout.textContent, /^TRACK: HD-01\/PROJECTS/);
+  h.event(projectsStar, 'pointerleave', { pointerType: 'mouse' });
+  assert.equal(readout.textContent, 'LOCK: STANDBY // 04 CONTACTS');
+
+  h.event(screen, 'pointermove', { pointerType: 'mouse', clientX: 150, clientY: 150 });
+  assert.equal(readout.textContent, 'SKY CURSOR // RA 06h00m / DEC +30\u00b0');
+  h.event(screen, 'pointerleave', { pointerType: 'mouse' });
+  assert.equal(readout.textContent, 'LOCK: STANDBY // 04 CONTACTS');
+
+  // Empty-sky click spawns an expanding ASCII sonar ping that paints synchronously, expands, and clears after 900ms.
+  const idleFx = h.id('map-fx').textContent;
+  h.event(screen, 'click', { clientX: 300, clientY: 300 });
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /PING \/\/ RA 12h00m DEC \+00\u00b0/);
+  const burstFx = h.id('map-fx').textContent;
+  assert.notEqual(burstFx, idleFx, 'empty-sky click immediately paints initial sonar burst onto #map-fx');
+  const burstRows = burstFx.split('\n');
+  assert.equal(burstRows.length, 41);
+  assert.ok(burstRows.every(row => row.length === 121), 'sonar overlay keeps exact 121x41 character grid');
+  assert.equal(burstRows[0].indexOf('v'), burstRows[40].indexOf('^'), 'sonar overlay never disturbs border verniers');
+
+  // Advance through expansion phases (0 -> 350ms -> 700ms) and verify expiry (>900ms).
+  h.frame(0);
+  h.frame(200);
+  h.frame(200); // 400ms -> expanding 'o' ring
+  const midFx = h.id('map-fx').textContent;
+  assert.ok(midFx.includes('o'), 'expanding sonar ring renders ASCII o glyphs mid-pulse');
+  for (let i = 0; i < 7; i++) h.frame(100); // +700ms (1100ms total > 900ms expiry)
+  const postFx = h.id('map-fx').textContent;
+  assert.equal(postFx.includes('o'), false, 'expired sonar ring clears cleanly after 900ms');
+
+  // Held scan and reduced motion log the ping without scheduling RAF or mutating static #map-fx.
+  h.click(h.id('sweep-toggle'));
+  assert.equal(h.id('map').dataset.sweep, 'held');
+  assert.equal(h.frames.size, 0);
+  const heldFx = h.id('map-fx').textContent;
+  h.event(screen, 'click', { clientX: 300, clientY: 300 });
+  assert.equal(h.frames.size, 0, 'empty-sky click while held never schedules RAF');
+  assert.equal(h.id('map-fx').textContent, heldFx);
+  assert.match(h.id('telemetry-log').children.at(-1).textContent, /PING \/\/ RA 12h00m DEC \+00\u00b0/);
+
+  const reduced = harness({ reducedMotion: true });
+  const reducedFx = reduced.id('map-fx').textContent;
+  reduced.event(reduced.select('.chart-screen')[0], 'click', { clientX: 300, clientY: 300 });
+  assert.equal(reduced.frames.size, 0, 'empty-sky click under reduced motion never schedules RAF');
+  assert.equal(reduced.id('map-fx').textContent, reducedFx);
+  assert.match(reduced.id('telemetry-log').children.at(-1).textContent, /PING \/\/ RA 12h00m DEC \+00\u00b0/);
+});
+
+test("QA seams: palette backdrop click, cross-route cut/ping, mobile iOS zoom/keypad guards, and print/reduced-motion ordering", () => {
+  const h = harness();
+  const palette = h.id('cmd-palette');
+  const cmdToggle = h.id('cmd-toggle');
+  const cmdInput = h.id('cmd-input');
+  const cmdList = h.id('cmd-list');
+  const runCmd = query => {
+    if (palette.hidden) h.click(cmdToggle);
+    cmdInput.value = query;
+    h.event(cmdInput, 'input');
+    h.event(cmdInput, 'keydown', { key: 'Enter' });
+  };
+
+  // 1. Backdrop click closes palette and restores focus; dialog click keeps it open.
+  h.click(cmdToggle);
+  assert.equal(palette.hidden, false);
+  h.click(h.select('.cmd-palette-dialog')[0]);
+  assert.equal(palette.hidden, false, 'clicking inside palette dialog never dismisses it');
+  h.click(palette);
+  assert.equal(palette.hidden, true, 'clicking dark overlay outside dialog closes palette');
+  assert.equal(h.document.activeElement, cmdToggle, 'backdrop dismiss restores focus to trigger');
+
+  // 2. Clicking an inline-output command item keeps focus anchored in #cmd-input.
+  h.click(cmdToggle);
+  cmdInput.value = 'whoami';
+  h.event(cmdInput, 'input');
+  h.document.body.focus();
+  h.click(cmdList.children[0]);
+  assert.equal(palette.hidden, false);
+  assert.equal(h.document.activeElement, cmdInput, 'inline command click keeps prompt focused');
+  h.click(palette);
+
+  // 3. Running `cut` from #map switches to #about and cuts; running `cut` inside #about keeps focus on #jack-cut-btn.
+  h.route('#map');
+  const beforeMapCut = h.id('jack-front').textContent;
+  runCmd('cut');
+  assert.equal(h.location.hash, '#about');
+  assert.notEqual(h.id('jack-front').textContent, beforeMapCut);
+  runCmd('cut');
+  assert.equal(h.document.activeElement, h.id('jack-cut-btn'), 'in-place cut keeps keyboard focus inside #about');
+
+  // Reduced-motion `cut` from #map survives the subsequent hashchange event.
+  const rm = harness({ reducedMotion: true });
+  rm.click(rm.id('cmd-toggle'));
+  rm.id('cmd-input').value = 'cut';
+  rm.event(rm.id('cmd-input'), 'input');
+  rm.event(rm.id('cmd-input'), 'keydown', { key: 'Enter' });
+  rm.event(rm.window, 'hashchange');
+  assert.equal(rm.location.hash, '#about');
+  assert.equal(rm.id('jack-suit-readout').textContent, 'TOP: J\u2666 DIAMONDS // 02/04');
+  assert.equal(rm.frames.size, 0);
+
+  // 5. Running `ping` from #projects stays safe (no crash/RAF); `ping` on live #map closes palette and focuses #map.
+  h.route('#projects');
+  runCmd('ping');
+  assert.equal(h.frames.size, 0);
+  assert.match(h.id('cmd-output').textContent, /PONG \/\/ SEL-RX ONLINE/);
+  h.click(palette);
+  h.route('#map');
+  runCmd('ping');
+  assert.equal(palette.hidden, true);
+  assert.equal(h.document.activeElement, h.id('map'), 'chart ping anchors focus on #map');
+
+  // 6. CSS cascade: mobile iOS >=16px input + 2x2 keypad, complete reduced-motion, and EOF print rules after .cmd-palette.
+  const cmdPos = css.indexOf('.cmd-palette {');
+  const rmPos = css.indexOf('@media (prefers-reduced-motion: reduce)');
+  const printPos = css.lastIndexOf('@media print');
+  assert.ok(cmdPos > 0 && rmPos > cmdPos && printPos > rmPos, 'CSS order: .cmd-palette -> prefers-reduced-motion -> @media print at EOF');
+  const mobileCmdBlock = css.slice(css.indexOf('@media (max-width: 700px)', cmdPos), rmPos);
+  assert.match(mobileCmdBlock, /\.cmd-input\s*\{[^}]*font-size:\s*max\(16px,\s*1em\)/s, 'mobile #cmd-input prevents iOS Safari auto-zoom');
+  assert.match(mobileCmdBlock, /\.cmd-item\s*\{[^}]*min-height:\s*44px/s);
+  const mobileShellBlock = css.slice(css.indexOf('@media (max-width: 700px)'), cmdPos);
+  assert.match(mobileShellBlock, /\.instrument-controls\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s, 'mobile footer uses balanced 2x2 keypad');
+  const rmBlock = css.slice(rmPos, printPos);
+  for (const sel of ['.console-shell', '.cmd-palette-dialog', '.jack-cut-btn', '.quick-mail-btn', '.star-core::before', '.tag-readout', '.is-filtered-in']) {
+    assert.ok(rmBlock.includes(sel), `prefers-reduced-motion covers ${sel}`);
+  }
+  const printBlock = css.slice(printPos);
+  assert.match(printBlock, /body \.jack-layer\s*\{[^}]*background:\s*transparent !important/s, 'print keeps stacked ASCII Jack layers non-occluding');
+  assert.ok(printBlock.includes('body .tag-chip'), 'print renders About tag chips in dark ink on white paper');
 });

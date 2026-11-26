@@ -5,7 +5,10 @@
   'use strict';
 
   const chart = document.querySelector('.star-chart');
+  const chartScreen = document.querySelector('.chart-screen');
   const toggle = document.getElementById('sweep-toggle');
+  const cmdToggle = document.getElementById('cmd-toggle');
+  const audioToggle = document.getElementById('audio-toggle');
   const scanState = document.getElementById('scan-state');
   const cursorReadout = document.getElementById('cursor-readout');
   const inspTarget = document.getElementById('insp-target');
@@ -98,6 +101,107 @@
   let lastPaintMs = -Infinity;
   let animElapsedMs = 0;
   let shuffleElapsedMs = 0;
+  let skyCursorText = null;
+  let pendingJump = null;
+  const SONAR_DURATION_MS = 900;
+  const sonarPings = [];
+
+  // Optional pure Web Audio API TUI synthesizer (off by default, zero audio files).
+  let audioEnabled = false;
+  let audioCtx = null;
+
+  function getAudioContext() {
+    if (!audioEnabled) return null;
+    if (audioCtx) {
+      try {
+        if (audioCtx.state === 'suspended' && typeof audioCtx.resume === 'function') {
+          audioCtx.resume().catch?.(() => {});
+        }
+      } catch { /* ignore restricted audio contexts */ }
+      return audioCtx;
+    }
+    try {
+      const Ctx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext))
+        || (typeof globalThis !== 'undefined' && (globalThis.AudioContext || globalThis.webkitAudioContext));
+      if (typeof Ctx !== 'function') return null;
+      audioCtx = new Ctx();
+      return audioCtx;
+    } catch {
+      return null;
+    }
+  }
+
+  function scheduleTone(ctx, { type = 'sine', freq = 660, endFreq = null, delay = 0, duration = 0.022, peak = 0.022 }) {
+    const start = (ctx.currentTime || 0) + Math.max(0, delay);
+    const dur = Math.min(0.18, Math.max(0.01, duration));
+    const gainPeak = Math.min(0.04, Math.max(0.001, peak));
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    if (endFreq && endFreq !== freq && typeof osc.frequency.exponentialRampToValueAtTime === 'function') {
+      osc.frequency.exponentialRampToValueAtTime(endFreq, start + dur);
+    }
+    gain.gain.setValueAtTime(0.0001, start);
+    if (typeof gain.gain.linearRampToValueAtTime === 'function') {
+      gain.gain.linearRampToValueAtTime(gainPeak, start + Math.min(0.005, dur * 0.25));
+    } else {
+      gain.gain.setValueAtTime(gainPeak, start);
+    }
+    if (typeof gain.gain.exponentialRampToValueAtTime === 'function') {
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    }
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + dur + 0.005);
+  }
+
+  let playTuiSound = (kind = 'click') => {
+    if (!audioEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx || typeof ctx.createOscillator !== 'function' || typeof ctx.createGain !== 'function') return;
+      if (kind === 'lock') {
+        scheduleTone(ctx, { type: 'sine', freq: 523.25, delay: 0, duration: 0.048, peak: 0.024 });
+        scheduleTone(ctx, { type: 'sine', freq: 783.99, delay: 0.045, duration: 0.050, peak: 0.022 });
+      } else if (kind === 'ping') {
+        scheduleTone(ctx, { type: 'sine', freq: 1046.5, endFreq: 784, delay: 0, duration: 0.180, peak: 0.028 });
+        scheduleTone(ctx, { type: 'sine', freq: 2093, endFreq: 1568, delay: 0, duration: 0.120, peak: 0.010 });
+      } else if (kind === 'cut') {
+        scheduleTone(ctx, { type: 'triangle', freq: 420, endFreq: 210, delay: 0, duration: 0.018, peak: 0.024 });
+        scheduleTone(ctx, { type: 'triangle', freq: 620, endFreq: 310, delay: 0.024, duration: 0.021, peak: 0.022 });
+      } else {
+        scheduleTone(ctx, { type: 'triangle', freq: 880, endFreq: 520, delay: 0, duration: 0.022, peak: 0.022 });
+      }
+    } catch { /* silent fallback in headless/restricted environments */ }
+  };
+
+  function reflectAudio() {
+    if (!audioToggle) return;
+    audioToggle.setAttribute('aria-pressed', String(audioEnabled));
+    audioToggle.setAttribute('aria-label', audioEnabled ? 'Mute console audio' : 'Enable console audio');
+    audioToggle.setAttribute('title', audioEnabled ? 'Mute console audio' : 'Enable console audio');
+    const text = audioToggle.querySelector?.('.btn-label');
+    if (text) text.replaceChildren(audioEnabled ? 'AUDIO: ON' : 'AUDIO: OFF');
+  }
+
+  function toggleAudio() {
+    audioEnabled = !audioEnabled;
+    reflectAudio();
+    appendLog(audioEnabled ? 'AUDIO SYNTH -> ON' : 'AUDIO SYNTH -> OFF');
+    if (audioEnabled) playTuiSound('click');
+  }
+
+  function isInside(node, root) {
+    if (!node || !root) return false;
+    if (node === root) return true;
+    return typeof node.isDescendantOf === 'function'
+      ? node.isDescendantOf(root)
+      : typeof root.contains === 'function'
+        ? root.contains(node)
+        : false;
+  }
 
   const animData = new Map();
 
@@ -644,6 +748,64 @@
     return Math.max(4, Math.min(spec.rows - 4, Math.round(last.row + (col - last.col) * slope * 0.35)));
   }
 
+  function renderSonarPings(grid, spec, elapsedMs) {
+    const { cols, rows } = spec;
+    const isWide = spec.key === 'wide';
+    const maxRx = isWide ? 11 : 7;
+    const maxRy = isWide ? 4.5 : 3;
+
+    for (let i = sonarPings.length - 1; i >= 0; i--) {
+      const ping = sonarPings[i];
+      const age = elapsedMs - ping.startedAtMs;
+      if (age < 0 || age >= SONAR_DURATION_MS) {
+        sonarPings.splice(i, 1);
+        continue;
+      }
+      if (ping.specKey !== spec.key) continue;
+
+      const progress = age / SONAR_DURATION_MS;
+      const paintCell = (c, r, ch) => {
+        if (c < 1 || c > cols - 2 || r < 1 || r > rows - 2) return;
+        if (grid[r][c] !== ' ') return;
+        if (insideBeaconClearance(c, r, spec, true, true)) return;
+        grid[r][c] = ch;
+      };
+
+      if (progress < 0.14) {
+        paintCell(ping.col, ping.row, '*');
+        paintCell(ping.col - 1, ping.row, 'o');
+        paintCell(ping.col + 1, ping.row, 'o');
+        paintCell(ping.col, ping.row - 1, '\u00b7');
+        paintCell(ping.col, ping.row + 1, '\u00b7');
+        continue;
+      }
+
+      const glyph = progress < 0.30 ? '*' : progress < 0.56 ? 'o' : progress < 0.80 ? ':' : '\u00b7';
+      const rx = 1.6 + progress * maxRx;
+      const ry = 0.8 + progress * maxRy;
+      const steps = Math.max(16, Math.round(rx * 6));
+      for (let s = 0; s < steps; s++) {
+        const angle = (s / steps) * Math.PI * 2;
+        const c = Math.round(ping.col + Math.cos(angle) * rx);
+        const r = Math.round(ping.row + Math.sin(angle) * ry);
+        paintCell(c, r, glyph);
+      }
+
+      if (progress >= 0.26 && progress < 0.72) {
+        const innerGlyph = progress < 0.48 ? ':' : '\u00b7';
+        const irx = rx * 0.52;
+        const iry = ry * 0.52;
+        const innerSteps = Math.max(12, Math.round(irx * 5));
+        for (let s = 0; s < innerSteps; s++) {
+          const angle = (s / innerSteps) * Math.PI * 2;
+          const c = Math.round(ping.col + Math.cos(angle) * irx);
+          const r = Math.round(ping.row + Math.sin(angle) * iry);
+          paintCell(c, r, innerGlyph);
+        }
+      }
+    }
+  }
+
   function renderFxFrame(spec, elapsedMs, staticSnapshot = false) {
     const state = animData.get(spec.key);
     if (!state) return;
@@ -766,6 +928,11 @@
           put(grid, pulsar.col - 3, pulsar.row, '\u00b7');
           put(grid, pulsar.col + 3, pulsar.row, '\u00b7');
         }
+      }
+
+      // 5. Expanding empty-sky ASCII sonar pings (zero effect when idle).
+      if (sonarPings.length > 0) {
+        renderSonarPings(grid, spec, elapsedMs);
       }
     }
 
@@ -1073,6 +1240,49 @@
     return shouldAnimateFx() || shouldAnimateShuffle();
   }
 
+  const jackSuitReadout = document.getElementById('jack-suit-readout');
+  const JACK_SUIT_META = [
+    { glyph: '\u2663', name: 'CLUBS', tone: 'mint' },
+    { glyph: '\u2666', name: 'DIAMONDS', tone: 'gold' },
+    { glyph: '\u2665', name: 'HEARTS', tone: 'warm' },
+    { glyph: '\u2660', name: 'SPADES', tone: 'cool' },
+  ];
+
+  function updateJackIndicator(elapsedMs = shuffleElapsedMs, staticSnapshot = false) {
+    if (!jackSuitReadout) return;
+    const t = staticSnapshot ? 0 : Math.max(0, elapsedMs);
+    const cycle = Math.floor(t / SHUFFLE_CYCLE_MS) % JACK_ORDERS.length;
+    const p = (t % SHUFFLE_CYCLE_MS) / SHUFFLE_CYCLE_MS;
+    const advanced = p >= 0.76;
+    const frontId = advanced ? JACK_ORDERS[cycle][1] : JACK_ORDERS[cycle][3];
+    const handNum = ((cycle + (advanced ? 1 : 0)) % JACK_ORDERS.length) + 1;
+    const meta = JACK_SUIT_META[frontId];
+    if (!meta) return;
+    const nextText = `TOP: J${meta.glyph} ${meta.name} // 0${handNum}/04`;
+    if (jackSuitReadout.textContent !== nextText) jackSuitReadout.textContent = nextText;
+    jackSuitReadout.dataset.suitTone = meta.tone;
+    jackSuitReadout.setAttribute('data-suit-tone', meta.tone);
+  }
+
+  function cutJackDeck() {
+    if (!hasJackLayers) return;
+    if (reduced.matches) {
+      const nextCycle = (Math.floor(shuffleElapsedMs / SHUFFLE_CYCLE_MS) + 1) % JACK_ORDERS.length;
+      shuffleElapsedMs = nextCycle * SHUFFLE_CYCLE_MS;
+      renderJackShuffle(shuffleElapsedMs, false);
+    } else {
+      const cycle = Math.floor(shuffleElapsedMs / SHUFFLE_CYCLE_MS);
+      const phase = (shuffleElapsedMs % SHUFFLE_CYCLE_MS) / SHUFFLE_CYCLE_MS;
+      shuffleElapsedMs = phase < 0.14
+        ? cycle * SHUFFLE_CYCLE_MS + SHUFFLE_CYCLE_MS * 0.16
+        : (cycle + 1) * SHUFFLE_CYCLE_MS;
+      renderJackShuffle(shuffleElapsedMs, false);
+    }
+    updateJackIndicator(shuffleElapsedMs, false);
+    appendLog('DECK CUT -> NEXT JACK.');
+    playTuiSound?.('cut');
+  }
+
   function stopFxLoop() {
     if (fxFrame) {
       cancelAnimationFrame(fxFrame);
@@ -1100,6 +1310,7 @@
     if (shouldAnimateShuffle()) {
       shuffleElapsedMs += dt;
       renderJackShuffle(shuffleElapsedMs, false);
+      updateJackIndicator(shuffleElapsedMs, false);
     }
     fxFrame = requestAnimationFrame(tickFx);
   }
@@ -1107,10 +1318,12 @@
   function syncFxLoop() {
     if (reduced.matches) {
       stopFxLoop();
+      sonarPings.length = 0;
       for (const link of contacts) link.classList.remove('is-pinged');
       renderAllFx(0, true);
       shuffleElapsedMs = 0;
       renderJackShuffle(0, true);
+      updateJackIndicator(0, true);
       return;
     }
     if (shouldRunLoop()) {
@@ -1144,7 +1357,7 @@
     if (!entry) {
       if (inspectorPrompt) inspectorPrompt.textContent = '> SELECT BEACON OR INDEX [1-4]';
       if (inspectorSummary) inspectorSummary.textContent = 'Vectors calibrated. Pick a star on the chart or index to open a portfolio record.';
-      if (cursorReadout) cursorReadout.textContent = 'LOCK: STANDBY // 04 CONTACTS';
+      if (cursorReadout) cursorReadout.textContent = skyCursorText || 'LOCK: STANDBY // 04 CONTACTS';
       if (inspTarget) inspTarget.textContent = 'SECTOR 04 / STANDBY';
       if (inspCoords) inspCoords.textContent = 'RA 12h00m / DEC +00\u00b000\'';
       if (inspClass) inspClass.textContent = 'ECLIPTIC SURVEY';
@@ -1208,12 +1421,14 @@
 
     pointerId = null;
     keyboardId = null;
+    skyCursorText = null;
 
     document.title = selected
       ? 'Yeon Jun Kim // ' + route[0].toUpperCase() + route.slice(1)
       : 'Yeon Jun Kim // Star Chart';
 
     if (selected) {
+      sonarPings.length = 0;
       const matchedOrigin = lastActivated && (lastActivated.dataset.contact === route || lastActivated.dataset.nav === route)
         ? lastActivated
         : selected;
@@ -1222,6 +1437,7 @@
       if (currentRoute !== route) {
         const entry = catalogById.get(route);
         appendLog(`LOCK ACQUIRED -> ${entry.label.toUpperCase()} [${entry.code}]`);
+        playTuiSound('lock');
       }
       currentRoute = route;
       if (focus) document.getElementById(route)?.focus({ preventScroll: !compact.matches });
@@ -1236,6 +1452,11 @@
     }
     reflectInspector();
     syncFxLoop();
+    if (focus && pendingJump) {
+      const pending = pendingJump;
+      pendingJump = null;
+      if (pending.route === route) pending.fn();
+    }
   }
 
   function toggleSweep() {
@@ -1256,12 +1477,14 @@
         if (event.pointerType === 'touch') return;
         inputMode = 'pointer';
         pointerId = id;
+        skyCursorText = null;
         reflectInspector();
       });
       link.addEventListener('pointermove', event => {
         if (event.pointerType === 'touch' || (inputMode === 'pointer' && pointerId === id)) return;
         inputMode = 'pointer';
         pointerId = id;
+        skyCursorText = null;
         reflectInspector();
       });
       link.addEventListener('pointerleave', event => {
@@ -1269,7 +1492,11 @@
         if (pointerId === id) { pointerId = null; reflectInspector(); }
       });
       link.addEventListener('focus', () => {
-        if (inputMode === 'keyboard') { keyboardId = id; reflectInspector(); }
+        if (inputMode === 'keyboard') {
+          keyboardId = id;
+          skyCursorText = null;
+          reflectInspector();
+        }
       });
       link.addEventListener('blur', () => {
         if (keyboardId === id) { keyboardId = null; reflectInspector(); }
@@ -1281,8 +1508,92 @@
   bindTargetEvents(contacts, 'contact');
   bindTargetEvents(navLinks, 'nav');
 
+  // Star chart live sky cursor readout and empty-sky expanding ASCII sonar ping.
+  function chartCoordsFromEvent(event) {
+    if (!chartScreen || typeof chartScreen.getBoundingClientRect !== 'function') return null;
+    const rect = chartScreen.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') return null;
+    const relX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const relY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const totalMinutes = Math.min(23 * 60 + 59, Math.floor(relX * 24 * 60));
+    const raH = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+    const raM = String(totalMinutes % 60).padStart(2, '0');
+    const decNum = Math.round(60 - relY * 120);
+    const decSign = decNum >= 0 ? '+' : '-';
+    const decDeg = String(Math.abs(decNum)).padStart(2, '0');
+    const spec = narrowMedia.matches ? NARROW_SPEC : WIDE_SPEC;
+    const col = Math.max(1, Math.min(spec.cols - 2, Math.floor(relX * spec.cols)));
+    const row = Math.max(1, Math.min(spec.rows - 2, Math.floor(relY * spec.rows)));
+    return {
+      relX, relY, col, row, specKey: spec.key,
+      ra: `${raH}h${raM}m`,
+      dec: `${decSign}${decDeg}\u00b0`,
+      readout: `SKY CURSOR // RA ${raH}h${raM}m / DEC ${decSign}${decDeg}\u00b0`,
+      shortLabel: `RA ${raH}h${raM}m DEC ${decSign}${decDeg}\u00b0`,
+    };
+  }
+
+  function triggerSonarPing(coords, customLog = null) {
+    if (!coords) return;
+    playTuiSound('ping');
+    appendLog(customLog || `PING // ${coords.shortLabel}`);
+    if (!shouldAnimateFx()) return;
+    sonarPings.push({
+      col: coords.col,
+      row: coords.row,
+      specKey: coords.specKey,
+      startedAtMs: animElapsedMs,
+    });
+    while (sonarPings.length > 4) sonarPings.shift();
+    const activeSpec = narrowMedia.matches ? NARROW_SPEC : WIDE_SPEC;
+    renderFxFrame(activeSpec, animElapsedMs, false);
+  }
+
+  chartScreen?.addEventListener('pointermove', event => {
+    if (event.pointerType === 'touch') return;
+    if (event.target?.closest?.('.star-link')) {
+      if (skyCursorText !== null) {
+        skyCursorText = null;
+        reflectInspector();
+      }
+      return;
+    }
+    if (sections.has(routeId()) || pointerId || keyboardId) return;
+    const coords = chartCoordsFromEvent(event);
+    if (!coords) return;
+    skyCursorText = coords.readout;
+    if (cursorReadout) cursorReadout.textContent = skyCursorText;
+  });
+
+  chartScreen?.addEventListener('pointerleave', event => {
+    if (event.pointerType === 'touch') return;
+    if (skyCursorText !== null) {
+      skyCursorText = null;
+      reflectInspector();
+    }
+  });
+
+  chartScreen?.addEventListener('click', event => {
+    if (event.defaultPrevented || event.pointerType === 'touch') return;
+    if (event.target?.closest?.('.star-link')) return;
+    if (sections.has(routeId())) return;
+    const coords = chartCoordsFromEvent(event);
+    if (!coords) return;
+    triggerSonarPing(coords);
+  });
+
   toggle.hidden = false;
   toggle.addEventListener('click', toggleSweep);
+  if (audioToggle) {
+    audioToggle.hidden = false;
+    reflectAudio();
+    audioToggle.addEventListener('click', toggleAudio);
+  }
+  if (cmdToggle) {
+    cmdToggle.hidden = false;
+    cmdToggle.addEventListener('click', () => openPalette(cmdToggle));
+  }
   window.addEventListener('hashchange', () => reflectRoute(true));
   document.addEventListener('visibilitychange', reflectSweep);
   window.addEventListener('pagehide', () => { departed = true; reflectSweep(); });
@@ -1292,18 +1603,68 @@
     renderAllFx(animElapsedMs, reduced.matches);
   });
 
+  function isEditableElement(el) {
+    return Boolean(el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)));
+  }
+
   document.addEventListener('keydown', event => {
     inputMode = 'keyboard';
-    if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.defaultPrevented) return;
+
+    // Ctrl+K / Cmd+K toggles Command Palette from anywhere.
+    if (!event.repeat && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key?.toLowerCase() === 'k') {
+      if (cmdPalette) {
+        event.preventDefault();
+        togglePalette();
+      }
+      return;
+    }
+
+    // Command Palette takes highest priority while open (Escape closes it before lightbox/dossier).
+    if (cmdPalette && !cmdPalette.hidden) {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key === 'Escape' && !event.repeat && !event.shiftKey) {
+        event.preventDefault();
+        closePalette();
+        return;
+      }
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !event.shiftKey) {
+        event.preventDefault();
+        stepPaletteSelection(event.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (event.key === 'Enter' && !event.repeat && !event.shiftKey && document.activeElement !== cmdClose) {
+        event.preventDefault();
+        executeSelectedCommand();
+        return;
+      }
+      return;
+    }
+
+    if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const active = document.activeElement;
-    if (active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))) return;
-    const onChart = active === document.body || active === chart || active?.closest('.star-chart');
+    if (isEditableElement(active)) return;
+    const onChart = active === document.body || active === chart || active?.closest?.('.star-chart');
+
+    if (event.key === '/' && cmdPalette && (!lightbox || lightbox.hidden) && (!active || onChart)) {
+      event.preventDefault();
+      openPalette();
+      return;
+    }
+
     if (!onChart) return;
 
-    if (event.key === 'Escape' && lightbox && !lightbox.hidden) {
-      event.preventDefault();
-      closeLightbox();
-      return;
+    if (lightbox && !lightbox.hidden) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeLightbox();
+        return;
+      }
+      if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && lightboxGallery.length > 1) {
+        event.preventDefault();
+        stepLightbox(event.key === 'ArrowRight' ? 1 : -1);
+        return;
+      }
     }
 
     if (event.key === 'Escape' && sections.has(routeId())) {
@@ -1345,33 +1706,116 @@
     operatorLinks?.append(shortcut);
   }
 
-  /* Fluid dossier interactivity: console lightbox, filters, SignalTrace scope,
-     clickable Jack deck, About tag readouts, Seoul KST clock, Copy email, and
-     linked Contact channel-guide highlighting. */
+  /* Fluid dossier interactivity: console lightbox gallery,
+     waypoint navigation, clickable Jack deck + readout, About tag readouts,
+     Seoul KST clock + phase, quick-mail bar, Copy email, and channel-guide highlighting. */
   const lightbox = document.getElementById('media-lightbox');
   const lightboxImg = document.getElementById('lightbox-img');
   const lightboxCaption = document.getElementById('lightbox-caption');
   const lightboxSource = document.getElementById('lightbox-source');
+  const lightboxCounter = document.getElementById('lightbox-counter');
+  const lightboxPrev = document.getElementById('lightbox-prev');
+  const lightboxNext = document.getElementById('lightbox-next');
   const lightboxClose = document.getElementById('lightbox-close');
   let lightboxTrigger = null;
+  let lightboxGallery = [];
+  let lightboxIndex = 0;
 
-  function openLightbox({ src, alt, caption, href, sourceLabel, trigger }) {
-    if (!lightbox || !lightboxImg || !src) return;
-    lightboxTrigger = trigger || document.activeElement;
-    lightboxImg.setAttribute('src', src);
-    lightboxImg.setAttribute('alt', alt || '');
-    if (lightboxCaption) lightboxCaption.textContent = caption || alt || '';
+  function extractMediaItem(trigger) {
+    if (!trigger) return null;
+    if (trigger.classList?.contains('media-zoom-btn')) {
+      const figure = trigger.closest('.project-media');
+      const img = figure?.querySelector('img');
+      const link = figure?.querySelector('a');
+      const src = img?.getAttribute('src');
+      if (!src) return null;
+      return {
+        src,
+        alt: img.getAttribute('alt') || '',
+        caption: img.getAttribute('alt') || '',
+        href: link?.getAttribute('href') || '',
+        sourceLabel: link?.querySelector('.project-media-caption')?.textContent?.trim() || 'Open original',
+        trigger,
+      };
+    }
+    if (trigger.classList?.contains('paper-pipeline')) {
+      const entry = trigger.closest('.paper-entry');
+      const title = entry?.querySelector('cite')?.textContent?.trim();
+      const link = entry?.querySelector('a');
+      const src = trigger.getAttribute('src');
+      if (!src) return null;
+      const alt = trigger.getAttribute('alt') || '';
+      return {
+        src,
+        alt,
+        caption: title ? `${title} \u2014 ${alt}` : alt,
+        href: link?.getAttribute('href') || '',
+        sourceLabel: link?.textContent?.trim() || 'Open source',
+        trigger,
+      };
+    }
+    return null;
+  }
+
+  function collectDossierGallery(trigger) {
+    const dossier = trigger?.closest?.('.destination');
+    if (!dossier) return [];
+    return [...document.querySelectorAll('.media-zoom-btn, .paper-pipeline')]
+      .filter(node => isInside(node, dossier))
+      .map(extractMediaItem)
+      .filter(Boolean);
+  }
+
+  function renderLightboxItem() {
+    const item = lightboxGallery[lightboxIndex];
+    if (!item || !lightboxImg) return;
+    lightboxImg.setAttribute('src', item.src);
+    lightboxImg.setAttribute('alt', item.alt || '');
+    if (lightboxCaption) lightboxCaption.textContent = item.caption || item.alt || '';
     if (lightboxSource) {
-      if (href) {
-        lightboxSource.setAttribute('href', href);
-        lightboxSource.textContent = `${sourceLabel || 'Open original'} \u2192`;
+      if (item.href) {
+        lightboxSource.setAttribute('href', item.href);
+        lightboxSource.textContent = `${item.sourceLabel || 'Open original'} \u2192`;
         lightboxSource.hidden = false;
       } else {
         lightboxSource.hidden = true;
       }
     }
+    const hasGallery = lightboxGallery.length > 1;
+    if (lightboxCounter) {
+      lightboxCounter.hidden = !hasGallery;
+      if (hasGallery) {
+        const current = String(lightboxIndex + 1).padStart(2, '0');
+        const total = String(lightboxGallery.length).padStart(2, '0');
+        lightboxCounter.textContent = `${current} / ${total}`;
+      }
+    }
+    if (lightboxPrev) lightboxPrev.hidden = !hasGallery;
+    if (lightboxNext) lightboxNext.hidden = !hasGallery;
+  }
+
+  function openLightbox({ src, alt, caption, href, sourceLabel, trigger }) {
+    if (!lightbox || !lightboxImg || !src) return;
+    lightboxTrigger = trigger || document.activeElement;
+    const gallery = trigger ? collectDossierGallery(trigger) : [];
+    const matchedIndex = gallery.findIndex(entry => entry.trigger === trigger);
+    if (matchedIndex >= 0) {
+      lightboxGallery = gallery;
+      lightboxIndex = matchedIndex;
+    } else {
+      lightboxGallery = [{ src, alt, caption, href, sourceLabel, trigger }];
+      lightboxIndex = 0;
+    }
+    renderLightboxItem();
     lightbox.hidden = false;
     lightboxClose?.focus?.();
+  }
+
+  function stepLightbox(delta) {
+    if (!lightbox || lightbox.hidden || lightboxGallery.length <= 1) return;
+    lightboxIndex = (lightboxIndex + delta + lightboxGallery.length) % lightboxGallery.length;
+    renderLightboxItem();
+    playTuiSound?.('click');
   }
 
   function closeLightbox() {
@@ -1379,8 +1823,12 @@
     lightbox.hidden = true;
     lightboxTrigger?.focus?.();
     lightboxTrigger = null;
+    lightboxGallery = [];
+    lightboxIndex = 0;
   }
 
+  lightboxPrev?.addEventListener('click', () => stepLightbox(-1));
+  lightboxNext?.addEventListener('click', () => stepLightbox(1));
   lightboxClose?.addEventListener('click', closeLightbox);
   lightbox?.addEventListener('click', event => {
     if (event.target === lightbox) closeLightbox();
@@ -1389,34 +1837,15 @@
 
   for (const btn of document.querySelectorAll('.media-zoom-btn')) {
     btn.addEventListener('click', () => {
-      const figure = btn.closest('.project-media');
-      const img = figure?.querySelector('img');
-      const link = figure?.querySelector('a');
-      if (!img) return;
-      openLightbox({
-        src: img.getAttribute('src'),
-        alt: img.getAttribute('alt'),
-        caption: img.getAttribute('alt'),
-        href: link?.getAttribute('href'),
-        sourceLabel: link?.querySelector('.project-media-caption')?.textContent?.trim() || 'Open original',
-        trigger: btn,
-      });
+      const item = extractMediaItem(btn);
+      if (item) openLightbox(item);
     });
   }
 
   for (const diagram of document.querySelectorAll('.paper-pipeline')) {
     const inspectDiagram = () => {
-      const entry = diagram.closest('.paper-entry');
-      const title = entry?.querySelector('cite')?.textContent?.trim();
-      const link = entry?.querySelector('a');
-      openLightbox({
-        src: diagram.getAttribute('src'),
-        alt: diagram.getAttribute('alt'),
-        caption: title ? `${title} \u2014 ${diagram.getAttribute('alt')}` : diagram.getAttribute('alt'),
-        href: link?.getAttribute('href'),
-        sourceLabel: link?.textContent?.trim() || 'Open source',
-        trigger: diagram,
-      });
+      const item = extractMediaItem(diagram);
+      if (item) openLightbox(item);
     };
     diagram.addEventListener('click', inspectDiagram);
     diagram.addEventListener('keydown', event => {
@@ -1450,7 +1879,7 @@
     return dossierPanel.scrollHeight > dossierPanel.clientHeight + 2;
   }
 
-  function rollToCategory(trackId, target, buttons, activeBtn, logLabel) {
+  function rollToCategory(trackId, target, buttons, activeBtn, logLabel, silent = false) {
     setActiveWaypoint(trackId, buttons, activeBtn);
     if (!target) return;
     target.classList.remove('is-jump-target');
@@ -1471,7 +1900,10 @@
       target.scrollIntoView({ behavior, block: 'start' });
     }
     target.classList.add('is-jump-target');
-    appendLog(`JUMP -> ${logLabel}`);
+    if (!silent) {
+      appendLog(`JUMP -> ${logLabel}`);
+      playTuiSound('click');
+    }
   }
 
   const projectJumpBtns = [...document.querySelectorAll('[data-project-jump]')];
@@ -1521,26 +1953,16 @@
   dossierPanel?.addEventListener('scroll', syncActiveWaypoint);
   window.addEventListener('scroll', syncActiveWaypoint, { passive: true });
 
-  // About: click the shuffling Jack deck to deal/cut immediately to the next Jack.
+  // About: click the shuffling Jack deck or [ CUT DECK ] button to deal/cut immediately to the next Jack.
   const jackArtEl = document.querySelector('.jack-art');
+  const jackCutBtn = document.getElementById('jack-cut-btn');
   if (jackArtEl && hasJackLayers) {
     jackArtEl.classList.add('is-interactive');
     jackArtEl.setAttribute('title', 'Click to cut and deal the next Jack');
-    jackArtEl.addEventListener('click', () => {
-      if (reduced.matches) {
-        const nextCycle = (Math.floor(shuffleElapsedMs / SHUFFLE_CYCLE_MS) + 1) % JACK_ORDERS.length;
-        shuffleElapsedMs = nextCycle * SHUFFLE_CYCLE_MS;
-        renderJackShuffle(shuffleElapsedMs, false);
-      } else {
-        const cycle = Math.floor(shuffleElapsedMs / SHUFFLE_CYCLE_MS);
-        const phase = (shuffleElapsedMs % SHUFFLE_CYCLE_MS) / SHUFFLE_CYCLE_MS;
-        shuffleElapsedMs = phase < 0.14
-          ? cycle * SHUFFLE_CYCLE_MS + SHUFFLE_CYCLE_MS * 0.16
-          : (cycle + 1) * SHUFFLE_CYCLE_MS;
-        renderJackShuffle(shuffleElapsedMs, false);
-      }
-      appendLog('DECK CUT -> NEXT JACK.');
-    });
+    jackArtEl.addEventListener('click', cutJackDeck);
+  }
+  if (jackCutBtn && hasJackLayers) {
+    jackCutBtn.addEventListener('click', cutJackDeck);
   }
 
   // About: interactive interest & hobby chips revealing concise personal notes.
@@ -1564,6 +1986,7 @@
           out.textContent = tagDefaults.get(groupId) || '';
           out.classList.remove('has-note');
         }
+        playTuiSound('click');
         return;
       }
       chip.setAttribute('aria-pressed', 'true');
@@ -1571,31 +1994,57 @@
         out.textContent = `> [ ${chip.textContent.trim().toUpperCase()} ] ${chip.dataset.tagNote || ''}`;
         out.classList.add('has-note');
       }
+      playTuiSound('click');
     });
   }
 
-  // Contact: live Seoul KST clock, one-click Copy email, and linked channel-guide hover.
+  // Contact: live Seoul KST clock + time-of-day badge, quick-mail bar, Copy email, and channel-guide hover.
   const seoulClockEl = document.getElementById('seoul-clock');
-  function formatSeoulTime() {
+  const seoulPhaseEl = document.getElementById('seoul-phase');
+  function getSeoulTimeInfo(date = new Date()) {
+    let hhmm = '';
     try {
       if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
-        const formatted = new Intl.DateTimeFormat('en-GB', {
+        hhmm = new Intl.DateTimeFormat('en-GB', {
           timeZone: 'Asia/Seoul',
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,
-        }).format(new Date());
-        return `${formatted} KST`;
+          hourCycle: 'h23',
+        }).format(date);
       }
     } catch { /* fall back to fixed UTC+9 offset below */ }
-    const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-    return `${kst.toISOString().slice(11, 16)} KST`;
+    if (!/^\d{2}:\d{2}$/.test(hhmm)) {
+      const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+      hhmm = kst.toISOString().slice(11, 16);
+    }
+    let hour = Number(hhmm.slice(0, 2));
+    if (hour === 24) {
+      hour = 0;
+      hhmm = `00${hhmm.slice(2)}`;
+    }
+    const phase = hour >= 6 && hour <= 17
+      ? 'DAYTIME'
+      : hour >= 18 && hour <= 22
+        ? 'EVENING'
+        : 'LATE NIGHT';
+    return { clock: `${hhmm} KST`, hour, phase };
+  }
+  function formatSeoulTime(date = new Date()) {
+    return getSeoulTimeInfo(date).clock;
   }
   function updateSeoulClock() {
-    if (!seoulClockEl) return;
-    const text = formatSeoulTime();
-    seoulClockEl.textContent = text;
-    seoulClockEl.setAttribute('datetime', text);
+    const info = getSeoulTimeInfo();
+    if (seoulClockEl) {
+      seoulClockEl.textContent = info.clock;
+      seoulClockEl.setAttribute('datetime', info.clock);
+    }
+    if (seoulPhaseEl) {
+      seoulPhaseEl.textContent = info.phase;
+      const tone = info.phase === 'DAYTIME' ? 'day' : info.phase === 'EVENING' ? 'evening' : 'night';
+      seoulPhaseEl.dataset.phase = tone;
+      seoulPhaseEl.setAttribute('data-phase', tone);
+    }
   }
   updateSeoulClock();
   window.addEventListener('hashchange', updateSeoulClock);
@@ -1604,6 +2053,29 @@
     setInterval(() => {
       if (!document.hidden && routeId() === 'contact') updateSeoulClock();
     }, 15000);
+  }
+
+  const quickMailBar = document.getElementById('quick-mail-bar');
+  const quickMailBtns = [...document.querySelectorAll('.quick-mail-btn')];
+  const emailChannelEl = document.querySelector('[data-contact-channel="email"]');
+  const emailChannelHref = emailChannelEl?.getAttribute('href') || '';
+  if (quickMailBar) {
+    if (!emailChannelHref) {
+      quickMailBar.hidden = true;
+    } else {
+      const baseMail = emailChannelHref.startsWith('mailto:') ? emailChannelHref.split('?')[0] : '';
+      for (const btn of quickMailBtns) {
+        const currentHref = btn.getAttribute('href') || '';
+        const queryIdx = currentHref.indexOf('?');
+        const query = queryIdx >= 0 ? currentHref.slice(queryIdx) : '';
+        if (baseMail) btn.setAttribute('href', `${baseMail}${query}`);
+        btn.addEventListener('click', () => {
+          const topic = (btn.dataset.mailTopic || btn.textContent || 'EMAIL').trim().toUpperCase();
+          appendLog(`MAIL DRAFT -> ${topic}`);
+          playTuiSound?.('click');
+        });
+      }
+    }
   }
 
   const copyEmailBtn = document.getElementById('copy-email-btn');
@@ -1620,6 +2092,7 @@
     copyEmailBtn.textContent = `Copied: ${email}`;
     copyEmailBtn.classList.add('is-copied');
     appendLog('EMAIL COPIED -> CLIPBOARD.');
+    playTuiSound?.('click');
     if (typeof clearTimeout === 'function' && copyResetTimer) clearTimeout(copyResetTimer);
     if (typeof setTimeout === 'function') {
       copyResetTimer = setTimeout(() => {
@@ -1652,10 +2125,496 @@
     guide.addEventListener('pointerleave', () => highlightChannel(null));
   }
 
+  // Operator Command Palette: ranked fuzzy/prefix autocomplete + 23 power-user & fun commands.
+  const cmdPalette = document.getElementById('cmd-palette');
+  const cmdInput = document.getElementById('cmd-input');
+  const cmdList = document.getElementById('cmd-list');
+  const cmdOutput = document.getElementById('cmd-output');
+  const cmdClose = document.getElementById('cmd-close');
+  let paletteTrigger = null;
+  let renderedItems = [];
+  let selectedIndex = 0;
+  let fortuneIndex = 0;
+
+  const FORTUNES = [
+    '"Explore. Dream. Discover." \u2014 H. Jackson Brown Jr. (SEL-RX transmission)',
+    'Signal hides inside the noise until you pick the right filter. \u2014 DSP log',
+    'Breadth connects the dots that specialization leaves in separate orbits. \u2014 Generalist note',
+    'Every spectrum tells a story if you integrate long enough. \u2014 Astrometric survey',
+    'Four suits, one hand: switch frames when the problem shifts. \u2014 Operator deck',
+  ];
+
+  function showPaletteOutput(text) {
+    if (!cmdOutput) return;
+    cmdOutput.textContent = text;
+    cmdOutput.hidden = false;
+  }
+
+  function navigateToSection(id) {
+    closeLightbox();
+    if (id === 'map') {
+      if (sections.has(routeId())) {
+        location.hash = 'map';
+        reflectRoute(false);
+      } else {
+        appendLog('CHART STANDBY ACTIVE.');
+      }
+      chart?.focus?.({ preventScroll: !compact.matches });
+      return;
+    }
+    if (routeId() !== id) {
+      location.hash = id;
+      reflectRoute(false);
+    }
+    document.getElementById(id)?.focus?.({ preventScroll: !compact.matches });
+  }
+
+  function jumpToProjectGroup(key) {
+    closePalette({ restoreFocus: false });
+    const switched = routeId() !== 'projects';
+    navigateToSection('projects');
+    const btn = projectJumpBtns.find(node => node.dataset.projectJump === key);
+    const target = projectGroups.find(node => node.dataset.projectGroup === key);
+    if (btn && target) {
+      rollToCategory('projects-filters', target, projectJumpBtns, btn, `PROJECTS:${key.toUpperCase()}`);
+      if (switched) {
+        pendingJump = {
+          route: 'projects',
+          fn: () => rollToCategory('projects-filters', target, projectJumpBtns, btn, `PROJECTS:${key.toUpperCase()}`, true),
+        };
+      }
+    }
+  }
+
+  function jumpToResearchSection(key) {
+    closePalette({ restoreFocus: false });
+    const switched = routeId() !== 'research';
+    navigateToSection('research');
+    const btn = researchJumpBtns.find(node => node.dataset.researchJump === key);
+    const target = researchSections.find(node => node.dataset.researchSection === key);
+    if (btn && target) {
+      rollToCategory('research-filters', target, researchJumpBtns, btn, `RESEARCH:${key.toUpperCase()}`);
+      if (switched) {
+        pendingJump = {
+          route: 'research',
+          fn: () => rollToCategory('research-filters', target, researchJumpBtns, btn, `RESEARCH:${key.toUpperCase()}`, true),
+        };
+      }
+    }
+  }
+
+  function openContactChannel(channel, label) {
+    const link = document.querySelector(`[data-contact-channel="${channel}"]`);
+    const href = link?.getAttribute('href') || '';
+    if (!href) {
+      showPaletteOutput(`${label.toUpperCase()} // Channel is currently unconfigured.`);
+      playTuiSound('click');
+      return;
+    }
+    try {
+      if (typeof window !== 'undefined' && typeof window.open === 'function') {
+        window.open(href, '_blank', 'noopener');
+      }
+    } catch { /* ignore blocked popups */ }
+    appendLog(`OPEN CHANNEL -> ${label.toUpperCase()}`);
+    playTuiSound('click');
+    showPaletteOutput(`OPENED // ${label.toUpperCase()} -> ${href}`);
+  }
+
+  const COMMANDS = [
+    {
+      id: 'projects', aliases: ['work', '1'], category: 'NAV',
+      desc: 'Open Projects dossier (05 builds: 02 hackathons, 03 personal)',
+      run() { closePalette({ restoreFocus: false }); navigateToSection('projects'); },
+    },
+    {
+      id: 'research', aliases: ['papers', '2'], category: 'NAV',
+      desc: 'Open Research dossier (04 papers, 03 awards)',
+      run() { closePalette({ restoreFocus: false }); navigateToSection('research'); },
+    },
+    {
+      id: 'about', aliases: ['bio', '3'], category: 'NAV',
+      desc: 'Open About dossier & ASCII Jack deck',
+      run() { closePalette({ restoreFocus: false }); navigateToSection('about'); },
+    },
+    {
+      id: 'contact', aliases: ['links', '4'], category: 'NAV',
+      desc: 'Open Contact channels & Seoul KST clock',
+      run() { closePalette({ restoreFocus: false }); navigateToSection('contact'); },
+    },
+    {
+      id: 'chart', aliases: ['map', 'home'], category: 'NAV',
+      desc: 'Return to Star Chart overview',
+      run() { closePalette({ restoreFocus: false }); navigateToSection('map'); },
+    },
+    {
+      id: 'hackathons', aliases: ['signaltrace', 'biotwin'], category: 'JUMP',
+      desc: 'Jump to Projects -> Hackathon Participation',
+      run() { jumpToProjectGroup('hackathons'); },
+    },
+    {
+      id: 'personal', aliases: ['elsewhere', 'allowance'], category: 'JUMP',
+      desc: 'Jump to Projects -> Personal projects',
+      run() { jumpToProjectGroup('personal'); },
+    },
+    {
+      id: 'ippg', aliases: ['ppg', 'bp'], category: 'JUMP',
+      desc: 'Jump to Research -> iPPG Research & papers',
+      run() { jumpToResearchSection('ippg'); },
+    },
+    {
+      id: 'sleep', aliases: ['aauwss'], category: 'JUMP',
+      desc: 'Jump to Research -> Sleep Research',
+      run() { jumpToResearchSection('sleep'); },
+    },
+    {
+      id: 'stress', aliases: ['emotion', 'bvp'], category: 'JUMP',
+      desc: 'Jump to Research -> Stress/Emotion Research',
+      run() { jumpToResearchSection('stress'); },
+    },
+    {
+      id: 'awards', aliases: ['honors', 'prizes'], category: 'JUMP',
+      desc: 'Jump to Research -> Awards (03 coauthored honors)',
+      run() { jumpToResearchSection('awards'); },
+    },
+    {
+      id: 'email', aliases: ['mail', 'copy-email'], category: 'COMMS',
+      desc: 'Copy yeonjunkim70@gmail.com to clipboard',
+      run() {
+        const emailHref = document.querySelector('[data-contact-channel="email"]')?.getAttribute('href') || '';
+        const email = emailHref ? emailHref.replace(/^mailto:/i, '').split('?')[0] : '';
+        if (!email) {
+          showPaletteOutput('EMAIL // Channel is currently unconfigured.');
+          playTuiSound('click');
+          return;
+        }
+        try {
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(email).catch?.(() => {});
+          }
+        } catch { /* ignore restricted clipboard contexts */ }
+        appendLog('EMAIL COPIED -> CLIPBOARD.');
+        playTuiSound('click');
+        showPaletteOutput(`EMAIL COPIED // ${email}`);
+      },
+    },
+    {
+      id: 'github', aliases: ['gh', 'code', 'repos'], category: 'LINK',
+      desc: 'Open GitHub profile (calavera16)',
+      run() { openContactChannel('github', 'GitHub'); },
+    },
+    {
+      id: 'youtube', aliases: ['yt', 'videos'], category: 'LINK',
+      desc: 'Open YouTube channel (@calavera6712)',
+      run() { openContactChannel('youtube', 'YouTube'); },
+    },
+    {
+      id: 'instagram', aliases: ['ig', 'social'], category: 'LINK',
+      desc: 'Open Instagram profile (@yj_07_25)',
+      run() { openContactChannel('instagram', 'Instagram'); },
+    },
+    {
+      id: 'help', aliases: ['?', 'commands', 'ls'], category: 'INFO',
+      desc: 'List all available console commands',
+      run() {
+        playTuiSound('click');
+        appendLog('CMD -> HELP INDEX');
+        showPaletteOutput([
+          'NAV   // projects · research · about · contact · chart (map/home)',
+          'JUMP  // hackathons · personal · ippg · sleep · stress · awards',
+          'COMMS // email · github · youtube · instagram · help',
+          'FUN   // ping · cut · scan · seoul · whoami · sound (audio/mute) · fortune',
+        ].join('\n'));
+      },
+    },
+    {
+      id: 'ping', aliases: ['sonar', 'radar'], category: 'FUN',
+      desc: 'Emit an ASCII sonar ping across the star chart',
+      run() {
+        if (!sections.has(routeId())) {
+          const spec = narrowMedia.matches ? NARROW_SPEC : WIDE_SPEC;
+          const centerCoords = {
+            col: Math.floor(spec.cols / 2),
+            row: Math.floor(spec.rows / 2),
+            specKey: spec.key,
+            shortLabel: 'RA 12h00m DEC +00\u00b0',
+          };
+          triggerSonarPing(centerCoords, 'SONAR PING -> SEL-RX PONG');
+          if (shouldAnimateFx()) {
+            closePalette({ restoreFocus: false });
+            chart?.focus?.({ preventScroll: !compact.matches });
+          } else {
+            showPaletteOutput('PONG // SEL-RX ONLINE (SCAN HELD/STATIC \u2014 RESUME SCAN FOR SONAR RING)');
+          }
+        } else {
+          playTuiSound('ping');
+          appendLog('SONAR PING -> SEL-RX PONG');
+          showPaletteOutput('PONG // SEL-RX ONLINE \u00b7 RUN [chart] TO SEE EXPANDING SONAR RING');
+        }
+      },
+    },
+    {
+      id: 'cut', aliases: ['deck', 'jack', 'shuffle'], category: 'FUN',
+      desc: 'Cut the ASCII Jack deck in About to the next suit',
+      run() {
+        closePalette({ restoreFocus: false });
+        const switched = routeId() !== 'about';
+        if (switched) navigateToSection('about');
+        else (jackCutBtn || document.getElementById('about'))?.focus?.({ preventScroll: !compact.matches });
+        cutJackDeck();
+        if (switched && reduced.matches) {
+          const cutTargetMs = shuffleElapsedMs;
+          pendingJump = {
+            route: 'about',
+            fn: () => {
+              shuffleElapsedMs = cutTargetMs;
+              renderJackShuffle(shuffleElapsedMs, false);
+              updateJackIndicator(shuffleElapsedMs, false);
+            },
+          };
+        }
+      },
+    },
+    {
+      id: 'scan', aliases: ['hold', 'sweep', 'resume'], category: 'FUN',
+      desc: 'Hold or resume the star chart sweep scan',
+      run() {
+        playTuiSound('click');
+        if (reduced.matches) {
+          showPaletteOutput('SCAN STATIC // REDUCED MOTION PREFERENCE ACTIVE');
+          return;
+        }
+        toggleSweep();
+        showPaletteOutput(`SCAN STATUS // ${held ? 'HELD (PAUSED)' : 'RUNNING (LIVE SWEEP)'}`);
+      },
+    },
+    {
+      id: 'seoul', aliases: ['time', 'kst', 'clock'], category: 'FUN',
+      desc: 'Check live Seoul local time & day phase (KST)',
+      run() {
+        updateSeoulClock();
+        const info = getSeoulTimeInfo();
+        playTuiSound('click');
+        appendLog(`CMD -> SEOUL ${info.clock} (${info.phase})`);
+        showPaletteOutput(`SEL // SEOUL \u00b7 ${info.clock} \u00b7 ${info.phase}`);
+      },
+    },
+    {
+      id: 'whoami', aliases: ['operator', 'id', 'calavera'], category: 'FUN',
+      desc: 'Display verified operator dossier card',
+      run() {
+        playTuiSound('click');
+        appendLog('CMD -> WHOAMI');
+        showPaletteOutput('YEON JUN KIM (CALAVERA) // HALLYM UNIV. CS // INDEPENDENT UNDERGRADUATE RESEARCHER // AI, BIOMEDICAL SIGNALS, EMBEDDED, ASTRONOMY');
+      },
+    },
+    {
+      id: 'sound', aliases: ['audio', 'mute', 'synth', 'sfx'], category: 'FUN',
+      desc: 'Toggle optional Web Audio TUI synthesizer',
+      run() {
+        toggleAudio();
+        showPaletteOutput(`AUDIO SYNTH // ${audioEnabled ? 'ON (SUBTLE TUI TONES ACTIVE)' : 'OFF (SILENT MODE)'}`);
+      },
+    },
+    {
+      id: 'fortune', aliases: ['quote', 'signal', 'transmission'], category: 'FUN',
+      desc: 'Decode a deep-space / generalist transmission quote',
+      run() {
+        const index = fortuneIndex;
+        const text = FORTUNES[index];
+        fortuneIndex = (fortuneIndex + 1) % FORTUNES.length;
+        playTuiSound('click');
+        appendLog(`CMD -> FORTUNE [0${index + 1}/0${FORTUNES.length}]`);
+        showPaletteOutput(`RX FORTUNE [0${index + 1}/0${FORTUNES.length}] // ${text}`);
+      },
+    },
+  ];
+
+  function isSubsequence(needle, haystack) {
+    let i = 0;
+    for (let j = 0; j < haystack.length && i < needle.length; j++) {
+      if (haystack[j] === needle[i]) i++;
+    }
+    return i === needle.length;
+  }
+
+  function scoreCommand(cmd, rawQuery) {
+    const q = String(rawQuery || '').trim().toLowerCase().replace(/^\/+/, '');
+    if (!q) return 1;
+    const id = cmd.id.toLowerCase();
+    const aliases = (cmd.aliases || []).map(a => a.toLowerCase());
+    const desc = cmd.desc.toLowerCase();
+    if (id === q || aliases.includes(q)) return 100;
+    if (id.startsWith(q) || aliases.some(a => a.startsWith(q))) return 80;
+    if (id.includes(q) || aliases.some(a => a.includes(q)) || desc.includes(q)) return 50;
+    if (isSubsequence(q, id) || aliases.some(a => isSubsequence(q, a)) || isSubsequence(q, `${id} ${desc}`)) return 25;
+    return 0;
+  }
+
+  function syncPaletteSelection() {
+    for (let i = 0; i < renderedItems.length; i++) {
+      const { el } = renderedItems[i];
+      const active = i === selectedIndex;
+      el.classList.toggle('is-selected', active);
+      el.setAttribute('aria-selected', String(active));
+    }
+    if (cmdInput) {
+      const current = renderedItems[selectedIndex];
+      if (current) cmdInput.setAttribute('aria-activedescendant', current.el.id);
+      else cmdInput.removeAttribute('aria-activedescendant');
+    }
+  }
+
+  function renderPaletteList(query = '') {
+    if (!cmdList) return;
+    const ranked = COMMANDS
+      .map((cmd, order) => ({ cmd, order, score: scoreCommand(cmd, query) }))
+      .filter(entry => entry.score > 0)
+      .sort((a, b) => (b.score - a.score) || (a.order - b.order));
+
+    renderedItems = [];
+    cmdList.replaceChildren();
+
+    if (ranked.length === 0) {
+      selectedIndex = 0;
+      const empty = document.createElement('li');
+      empty.setAttribute('class', 'cmd-empty');
+      empty.classList.add('cmd-empty');
+      empty.setAttribute('role', 'presentation');
+      empty.textContent = 'No matching commands. Type "help" for full index.';
+      cmdList.append(empty);
+      syncPaletteSelection();
+      return;
+    }
+
+    if (selectedIndex >= ranked.length) selectedIndex = 0;
+
+    ranked.forEach(({ cmd }, idx) => {
+      const item = document.createElement('li');
+      item.id = `cmd-opt-${cmd.id}`;
+      item.setAttribute('id', item.id);
+      item.setAttribute('class', 'cmd-item');
+      item.classList.add('cmd-item');
+      item.setAttribute('role', 'option');
+      item.setAttribute('data-cmd-id', cmd.id);
+      item.dataset.cmdId = cmd.id;
+
+      const cursor = document.createElement('span');
+      cursor.setAttribute('class', 'cmd-item-cursor');
+      cursor.classList.add('cmd-item-cursor');
+      cursor.setAttribute('aria-hidden', 'true');
+      cursor.textContent = '>';
+
+      const cat = document.createElement('span');
+      cat.setAttribute('class', 'cmd-cat');
+      cat.classList.add('cmd-cat');
+      cat.textContent = `[${cmd.category}]`;
+
+      const name = document.createElement('span');
+      name.setAttribute('class', 'cmd-name');
+      name.classList.add('cmd-name');
+      name.textContent = cmd.id;
+
+      const desc = document.createElement('span');
+      desc.setAttribute('class', 'cmd-desc');
+      desc.classList.add('cmd-desc');
+      desc.textContent = cmd.desc;
+
+      item.append(cursor, cat, name, desc);
+      item.addEventListener('pointerenter', () => {
+        selectedIndex = idx;
+        syncPaletteSelection();
+      });
+      item.addEventListener('click', () => {
+        selectedIndex = idx;
+        syncPaletteSelection();
+        cmd.run();
+        if (cmdPalette && !cmdPalette.hidden) cmdInput?.focus?.();
+      });
+
+      cmdList.append(item);
+      renderedItems.push({ cmd, el: item });
+    });
+
+    syncPaletteSelection();
+  }
+
+  function stepPaletteSelection(delta) {
+    if (!renderedItems.length) return;
+    selectedIndex = (selectedIndex + delta + renderedItems.length) % renderedItems.length;
+    syncPaletteSelection();
+    renderedItems[selectedIndex]?.el?.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  function executeSelectedCommand() {
+    const entry = renderedItems[selectedIndex];
+    if (!entry) {
+      showPaletteOutput('UNKNOWN COMMAND // Type "help" to list all console commands.');
+      playTuiSound('click');
+      return;
+    }
+    entry.cmd.run();
+  }
+
+  function openPalette(trigger = null) {
+    if (!cmdPalette) return;
+    paletteTrigger = trigger || document.activeElement;
+    if (cmdInput) cmdInput.value = '';
+    if (cmdOutput) {
+      cmdOutput.hidden = true;
+      cmdOutput.textContent = '';
+    }
+    selectedIndex = 0;
+    renderPaletteList('');
+    cmdPalette.hidden = false;
+    cmdInput?.focus?.();
+    playTuiSound('click');
+  }
+
+  function closePalette({ restoreFocus = true } = {}) {
+    if (!cmdPalette || cmdPalette.hidden) return;
+    cmdPalette.hidden = true;
+    const target = paletteTrigger;
+    paletteTrigger = null;
+    if (restoreFocus && target && typeof target.focus === 'function') {
+      target.focus();
+    }
+  }
+
+  function togglePalette() {
+    if (!cmdPalette) return;
+    if (cmdPalette.hidden) openPalette();
+    else closePalette();
+  }
+
+  cmdInput?.addEventListener('input', () => {
+    selectedIndex = 0;
+    renderPaletteList(cmdInput.value || '');
+  });
+  cmdInput?.addEventListener('keydown', event => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'Escape' && !event.repeat && !event.shiftKey) {
+      event.preventDefault();
+      closePalette();
+    } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !event.shiftKey) {
+      event.preventDefault();
+      stepPaletteSelection(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Enter' && !event.repeat && !event.shiftKey) {
+      event.preventDefault();
+      executeSelectedCommand();
+    }
+  });
+  cmdClose?.addEventListener('click', () => closePalette());
+  cmdPalette?.addEventListener('click', event => {
+    if (event.target === cmdPalette) closePalette();
+  });
+  window.addEventListener('hashchange', () => closePalette({ restoreFocus: false }));
+
   stampSession();
   renderLog();
   renderStaticCharts();
   renderJackShuffle(0, reduced.matches);
+  updateJackIndicator(0, reduced.matches);
   reflectRoute();
   reflectSweep();
 })();

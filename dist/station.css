@@ -122,8 +122,9 @@ button {
 }
 .receiver-heading .command { flex: 0 0 auto; }
 h1, h2 { margin: 0; font: inherit; font-weight: 600; }
-.state-tag { color: var(--quiet); white-space: nowrap; font-size: .9em; }
+.state-tag { color: var(--quiet); white-space: nowrap; font-size: .9em; transition: color 120ms ease, text-shadow 120ms ease; }
 .state-tag::before { content: '\25a0 '; }
+.state-tag.is-boosted { color: var(--signal); text-shadow: 0 0 .55em rgb(227 184 113 / 35%); }
 .station-panel {
   min-width: 0;
   margin: 0;
@@ -262,7 +263,7 @@ h1, h2 { margin: 0; font: inherit; font-weight: 600; }
   border-color: rgb(20 23 22 / 45%);
   color: var(--console);
 }
-@media (pointer: coarse) { .intro-btn kbd, .command .key-hint { display: none; } }
+@media (pointer: coarse) { .intro-btn kbd, .command .key-hint, .decode-hint .key-hint { display: none; } }
 
 /* Receiver, decoder, and message console stages. */
 .reception-grid { display: grid; grid-template-columns: minmax(24ch, .7fr) minmax(0, 2fr); gap: 2ch; }
@@ -281,9 +282,31 @@ h1, h2 { margin: 0; font: inherit; font-weight: 600; }
   color: var(--muted);
   font-size: .85em;
 }
-.spectrum-scroll { container-type: inline-size; overflow-x: auto; padding-bottom: .5ch; }
+.scope-probe {
+  white-space: nowrap;
+  transition: color 120ms ease, text-shadow 120ms ease;
+}
+.scope-probe.is-probing {
+  color: var(--signal);
+  text-shadow: 0 0 .55em rgb(227 184 113 / 35%);
+}
+.spectrum-scroll { position: relative; container-type: inline-size; overflow-x: auto; padding-bottom: .5ch; cursor: crosshair; }
 .spectrum-plot, .spectrum-axis { font-size: min(1em, calc(100cqi / 41)); }
 .spectrum-plot { position: relative; width: 65ch; max-width: none; margin: 0 auto; }
+.spectrum-plot::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: min(calc(100% - 1px), var(--probe-x, 50%));
+  width: 1px;
+  background: rgb(227 184 113 / 55%);
+  box-shadow: 0 0 6px rgb(227 184 113 / 45%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.spectrum-scroll.is-probing .spectrum-plot::after { opacity: 1; }
 pre { margin: 0; font: inherit; line-height: 1.35; white-space: pre; }
 #spectrum-grid, #spectrum-grid-narrow { color: #484f46; }
 #spectrum-trace, #spectrum-trace-narrow { color: var(--signal); position: absolute; inset: 0; }
@@ -319,7 +342,9 @@ pre { margin: 0; font: inherit; line-height: 1.35; white-space: pre; }
 button:focus-visible, a:focus-visible, .spectrum-scroll:focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
 button:disabled { cursor: default; opacity: .6; }
 .decoder-content { outline: none; }
-.decode-panel { container-type: inline-size; margin: 1ch 0 2ch; padding: 3ch; }
+.decode-panel { container-type: inline-size; margin: 1ch 0 2ch; padding: 3ch; cursor: pointer; transition: border-color 140ms ease; }
+.decode-panel.is-boosted { border-color: var(--signal); }
+.decode-panel.is-complete { cursor: default; }
 .decode-source { margin: 0 0 4ch; color: var(--muted); }
 /* Equal-width letters and unchanged spaces keep the buffer steady as it resolves. */
 #decode-buffer {
@@ -339,7 +364,27 @@ progress { display: block; width: 100%; height: 1px; border: 0; appearance: none
 progress::-webkit-progress-bar { background: #353c33; }
 progress::-webkit-progress-value { background: var(--signal); }
 progress::-moz-progress-bar { background: var(--signal); }
-#decode-step { margin: 3ch 0 0; }
+.decode-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .6ch 2ch;
+  margin-top: 3ch;
+}
+#decode-step { margin: 0; }
+.decode-hint {
+  color: var(--muted);
+  font-size: .86em;
+  white-space: nowrap;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+.decode-hint-active { display: none; }
+.decode-panel:hover .decode-hint { color: var(--bone); }
+.decode-panel.is-boosted .decode-hint { color: var(--signal); text-shadow: 0 0 .5em rgb(227 184 113 / 30%); }
+.decode-panel.is-boosted .decode-hint-idle { display: none; }
+.decode-panel.is-boosted .decode-hint-active { display: inline; }
+.decode-panel.is-complete .decode-hint { opacity: 0; }
 .message-panel { padding: 3ch; }
 blockquote {
   max-width: 46ch;
@@ -382,18 +427,48 @@ blockquote {
   gap: 1.4ch;
   text-decoration: none;
 }
-.stay, .message .replay {
-  border: 0;
+.stay {
+  display: inline-flex;
+  align-items: center;
+  gap: .6ch;
+  border: 1px solid var(--panel-rule);
+  border-radius: 0;
+  background: var(--well);
+  color: var(--bone);
+  padding: .35ch 1.1ch;
+  min-height: 44px;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.stay:is(:hover, :focus-visible) {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--console);
+}
+.message .replay {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
-  padding: .5ch 0;
+  padding: .35ch .8ch;
   min-height: 44px;
   font: inherit;
   text-decoration: underline;
   text-underline-offset: .3em;
   cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
 }
-.stay:hover, .message .replay:hover { color: var(--bone); background: transparent; }
+.message .replay:is(:hover, :focus-visible) {
+  color: var(--bone);
+  border-color: var(--panel-rule);
+  background: transparent;
+}
 .noscript-fallback {
   position: fixed;
   inset: 0;
@@ -503,7 +578,8 @@ blockquote {
   .decode-panel { padding: 14px 12px; margin: 4px 0 12px; }
   .decode-source { margin-bottom: 14px; font-size: .88em; }
   #decode-buffer { margin-bottom: 14px; }
-  #decode-step { margin-top: 14px; }
+  .decode-status-row { margin-top: 14px; gap: 4px 12px; }
+  #decode-step { margin: 0; }
   .message-panel { padding: 18px 14px; }
   .message blockquote { max-width: none; line-height: 1.62; }
   .quote-credit {
@@ -529,5 +605,5 @@ blockquote {
 }
 @media (prefers-reduced-motion: reduce) {
   .intro-shell { animation: none; }
-  .intro-btn, .command, .replay { transition: none; }
+  .intro-btn, .command, .replay, .stay, .state-tag, .scope-probe, .spectrum-plot::after, .decode-panel, .decode-hint { transition: none; }
 }

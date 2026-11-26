@@ -17,13 +17,21 @@ function harness({ reducedMotion = false, backToMessage = false, historyState = 
       this.hidden = false;
       this.inert = false;
       this.disabled = false;
-      this.style = {};
+      this.style = { setProperty(name, value) { this[name] = value; } };
       this.dataset = {};
       this.attributes = {};
       this.children = new Map();
       this.entries = [];
       this.textContent = "";
+      const classes = new Set();
+      this.classList = {
+        add: value => classes.add(value),
+        remove: value => classes.delete(value),
+        contains: value => classes.has(value),
+        toggle(value, force = !classes.has(value)) { force ? classes.add(value) : classes.delete(value); return force; },
+      };
     }
+    getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; }
     append(...nodes) { this.entries.push(...nodes); }
     get textContent() { return this.entries.length ? this.entries.map(child => child.textContent).join("") : this.text || ""; }
     set textContent(value) { this.entries = []; this.text = value; }
@@ -37,12 +45,14 @@ function harness({ reducedMotion = false, backToMessage = false, historyState = 
   }
   const ids = Object.fromEntries([
     "space", "ascii-intro-shell", "intro-skip-btn", "intro-portfolio-link",
-    "terminal", "terminal-portfolio-link", "decoder", "message", "portfolio-handoff",
-    "decode-progress", "decode-percent", "receiver-location", "receive-log",
+    "terminal", "terminal-portfolio-link", "decoder", "decoder-portfolio-link", "message", "portfolio-handoff",
+    "decode-panel", "decode-hint", "decode-progress", "decode-percent", "receiver-location", "receive-log",
     "decode-segments", "decode-step", "decode-buffer", "decode-settled",
-    "decode-scrambled", "decoder-state", "spectrum-grid", "spectrum-trace",
+    "decode-scrambled", "decoder-state", "spectrum-scroll", "spectrum-probe",
+    "spectrum-plot-wide", "spectrum-plot-narrow", "spectrum-grid", "spectrum-trace",
     "spectrum-grid-narrow", "spectrum-trace-narrow", "spectrum-axis", "spectrum-axis-narrow",
   ].map(name => [name, new Element()]));
+  ids["spectrum-probe"].textContent = "CARRIER / 0 kHz";
   const actions = Object.fromEntries(["decode", "replay", "skip", "portfolio"].map(name => [name, new Element()]));
   actions.portfolio.setAttribute("href", "portfolio.html");
   ids["decode-buffer"].append(ids["decode-settled"], ids["decode-scrambled"]);
@@ -116,6 +126,7 @@ function harness({ reducedMotion = false, backToMessage = false, historyState = 
     click: name => event(actions[name], "click"),
     escape: properties => event(window, "keydown", { key: "Escape", ...properties }),
     enter: properties => event(window, "keydown", { key: "Enter", ...properties }),
+    space: properties => event(window, "keydown", { key: " ", code: "Space", ...properties }),
     stage: () => document.body.dataset.stage,
     staleFrames: () => [...frames.values()],
   };
@@ -340,6 +351,136 @@ async function messageNavigation() {
   assert.equal(returned.fields["receive-utc"][0].textContent, "Awaiting capture");
 }
 
+async function spectrumProbe() {
+  const h = harness();
+  const scroll = h.ids["spectrum-scroll"];
+  const probe = h.ids["spectrum-probe"];
+  const wide = h.ids["spectrum-plot-wide"];
+  const narrow = h.ids["spectrum-plot-narrow"];
+  wide.getBoundingClientRect = () => ({ left: 100, top: 0, width: 400, height: 120 });
+
+  // Probing is inactive before the receiver console opens.
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 300 });
+  assert.equal(probe.textContent, "CARRIER / 0 kHz");
+
+  h.click("skip");
+  const snapshot = [
+    h.ids["spectrum-grid"].textContent,
+    h.ids["spectrum-trace"].textContent,
+    h.ids["spectrum-axis"].textContent,
+  ];
+
+  // Touch move must not stick hover readouts on mobile.
+  h.event(scroll, "pointermove", { pointerType: "touch", clientX: 300 });
+  assert.equal(probe.textContent, "CARRIER / 0 kHz");
+  assert.equal(probe.classList.contains("is-probing"), false);
+
+  // Carrier center (+0.0 kHz) reads peak power (-1.2 dB) with phosphor highlight and zero RAF loops.
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 300 });
+  assert.equal(probe.textContent, "PROBE +0.0 kHz // -1.2 dB");
+  assert.equal(probe.classList.contains("is-probing"), true);
+  assert.equal(scroll.classList.contains("is-probing"), true);
+  assert.equal(scroll.style["--probe-x"], "50.00%");
+  assert.equal(h.frames.size, 0, "spectrum probe uses zero idle animation frames");
+
+  // Noise floor (-2.4 kHz at 20% width) reads significantly below carrier peak.
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 180 });
+  const floorMatch = probe.textContent.match(/^PROBE -2\.4 kHz \/\/ (-\d+\.\d) dB$/);
+  assert.ok(floorMatch, `noise floor probe format: ${probe.textContent}`);
+  const floorDb = Number(floorMatch[1]);
+  assert.ok(floorDb <= -15 && floorDb >= -20, `noise floor dB sits well below carrier (${floorDb})`);
+
+  // Carrier shoulder sits strictly between carrier peak and noise floor.
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 100 + (30 / 64) * 400 });
+  const shoulderMatch = probe.textContent.match(/^PROBE -0\.3 kHz \/\/ (-\d+\.\d) dB$/);
+  assert.ok(shoulderMatch, `carrier shoulder probe format: ${probe.textContent}`);
+  assert.ok(Number(shoulderMatch[1]) < -1.2 && Number(shoulderMatch[1]) > floorDb);
+
+  // Out-of-bounds pointer positions clamp cleanly to -4.0 kHz and +4.0 kHz.
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 40 });
+  assert.match(probe.textContent, /^PROBE -4\.0 kHz \/\/ -\d+\.\d dB$/);
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 560 });
+  assert.match(probe.textContent, /^PROBE \+4\.0 kHz \/\/ -\d+\.\d dB$/);
+
+  // Leaving restores CARRIER / 0 kHz and leaves all ASCII spectrum buffers untouched.
+  h.event(scroll, "pointerleave", { pointerType: "mouse" });
+  assert.equal(probe.textContent, "CARRIER / 0 kHz");
+  assert.equal(probe.classList.contains("is-probing"), false);
+  assert.equal(scroll.classList.contains("is-probing"), false);
+  assert.deepEqual([
+    h.ids["spectrum-grid"].textContent,
+    h.ids["spectrum-trace"].textContent,
+    h.ids["spectrum-axis"].textContent,
+  ], snapshot, "spectrum character buffers never mutate during probing");
+
+  // Narrow viewport falls back seamlessly to #spectrum-plot-narrow rect.
+  wide.getBoundingClientRect = () => ({ left: 0, top: 0, width: 0, height: 0 });
+  narrow.getBoundingClientRect = () => ({ left: 20, top: 0, width: 200, height: 100 });
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 120 });
+  assert.equal(probe.textContent, "PROBE +0.0 kHz // -1.2 dB");
+  h.event(scroll, "pointercancel", { pointerType: "mouse" });
+  assert.equal(probe.textContent, "CARRIER / 0 kHz");
+
+  // Starting decode clears an active probe readout.
+  h.event(scroll, "pointermove", { pointerType: "mouse", clientX: 120 });
+  assert.equal(probe.classList.contains("is-probing"), true);
+  h.click("decode");
+  assert.equal(probe.textContent, "CARRIER / 0 kHz");
+  assert.equal(probe.classList.contains("is-probing"), false);
+}
+
+async function decoderBoost() {
+  const h = harness();
+  h.click("skip");
+  h.click("decode");
+  await h.advance(450);
+  h.only("decoder");
+  assert.equal(h.ids["decoder-state"].textContent, "DECODING");
+
+  // Interactive links retain native Space behavior without triggering boost.
+  const linkFocus = Object.assign(h.ids["decoder-portfolio-link"], { tagName: "A" });
+  linkFocus.focus();
+  assert.equal(h.space().defaultPrevented, false);
+  assert.equal(h.ids["decoder-state"].textContent, "DECODING");
+
+  // Pressing Space from decoder shell activates smooth 2.5x boost.
+  h.ids.decoder.querySelector(".decoder-content").focus();
+  assert.equal(h.space().defaultPrevented, true);
+  assert.equal(h.ids["decoder-state"].textContent, "DECODING // FAST");
+  assert.equal(h.ids["decoder-state"].classList.contains("is-boosted"), true);
+  assert.equal(h.ids["decode-panel"].classList.contains("is-boosted"), true);
+
+  // Hidden tab still freezes boosted decoding.
+  const pausedProgress = h.ids["decode-progress"].value;
+  h.document.hidden = true;
+  await h.advance(1000);
+  assert.equal(h.ids["decode-progress"].value, pausedProgress);
+  h.document.hidden = false;
+
+  // Boosted decoding completes well under normal 3100ms duration and resolves cleanly.
+  let steps = 0;
+  while (h.ids["decode-progress"].value !== 100 && steps < 40) {
+    await h.advance(50);
+    steps++;
+  }
+  assert.equal(h.ids["decode-progress"].value, 100);
+  assert.ok(steps < 30, `boosted decode finishes faster than normal (${steps * 50}ms)`);
+  assert.equal(h.ids["decoder-state"].textContent, "COMPLETE");
+  assert.equal(h.ids["decoder-state"].classList.contains("is-boosted"), false);
+  assert.equal(h.ids["decode-panel"].classList.contains("is-complete"), true);
+
+  await h.advance(1800);
+  assert.equal(h.stage(), "message");
+  h.click("replay");
+  await h.flush();
+  h.click("skip");
+  h.click("decode");
+  await h.advance(450);
+  assert.equal(h.ids["decoder-state"].textContent, "DECODING", "replay resets decoder boost state");
+  h.event(h.ids["decode-panel"], "click");
+  assert.equal(h.ids["decoder-state"].textContent, "DECODING // FAST", "clicking decode panel also activates boost");
+}
+
 test("station console markup, spectrum, escape, decode buffer, lifecycle and clean manual handoff", async () => {
   const html = fs.readFileSync(path.join(__dirname, "../dist/index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "../dist/station.css"), "utf8");
@@ -352,6 +493,19 @@ test("station console markup, spectrum, escape, decode buffer, lifecycle and cle
   assert.match(html, /id="decode-settled"><\/span><span id="decode-scrambled"/, "no extra whitespace at the moving reveal boundary");
   assert.match(html, /<noscript>[\s\S]*portfolio\.html[\s\S]*<\/noscript>/, "no-JS visitors get a direct link to the portfolio");
   assert.match(html, /<title>Yeon Jun Kim \/\/ Transmission<\/title>/);
+  assert.match(html, /rel="canonical" href="https:\/\/calavera16\.github\.io\/"/);
+  assert.match(html, /property="og:title" content="Yeon Jun Kim \/\/ Transmission"/);
+  assert.match(html, /property="og:description" content="Yeon Jun Kim — Student portfolio\. A transmission from deep space\."/);
+  assert.match(html, /property="og:type" content="website"/);
+  assert.match(html, /property="og:url" content="https:\/\/calavera16\.github\.io\/"/);
+  assert.match(html, /name="twitter:card" content="summary"/);
+  assert.match(html, /name="twitter:title" content="Yeon Jun Kim \/\/ Transmission"/);
+  assert.match(html, /name="twitter:description" content="Yeon Jun Kim — Student portfolio\. A transmission from deep space\."/);
+  assert.match(html, /id="spectrum-probe" class="scope-probe">CARRIER \/ 0 kHz<\/span>/);
+  assert.match(html, /id="spectrum-scroll" class="spectrum-scroll"/);
+  assert.match(html, /id="terminal-portfolio-link" class="stay" href="portfolio\.html"/);
+  assert.match(css, /\.scope-probe\.is-probing\s*\{[^}]*color:\s*var\(--signal\)/s);
+  assert.match(css, /\.stay:is\(:hover, :focus-visible\)\s*\{[^}]*background:\s*var\(--signal\)/s);
   assert.match(html, /viewBox='0 0 32 32'/);
   assert.match(html, /id="intro-portfolio-link"[^>]+href="portfolio\.html"/, "ASCII intro footer exposes 1-click fast-path to portfolio");
   assert.match(html, /id="decoder-portfolio-link"[^>]+href="portfolio\.html"/, "decoder footer exposes direct portfolio exit");
@@ -383,8 +537,10 @@ test("station console markup, spectrum, escape, decode buffer, lifecycle and cle
 
   await consoleMetadata();
   await earlyEscape();
+  await spectrumProbe();
   await decodingBuffer(false);
   await decodingBuffer(true);
+  await decoderBoost();
   await lifecycle(false);
   await lifecycle(true);
   await messageNavigation();
