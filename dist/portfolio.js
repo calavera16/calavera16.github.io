@@ -2610,6 +2610,28 @@
   });
   window.addEventListener('hashchange', () => closePalette({ restoreFocus: false }));
 
+  // Live GoatCounter site visit counter (https://calavera16.goatcounter.com/counter/TOTAL.json).
+  // Fails silently offline or under adblockers so the top band stays spotless.
+  const VISIT_COUNTER_URL = 'https://calavera16.goatcounter.com/counter/TOTAL.json';
+  function loadVisitCounter() {
+    const wrap = document.getElementById('visit-counter');
+    const out = document.getElementById('visit-count');
+    if (!wrap || !out || typeof fetch !== 'function') return;
+    if (!/^https?:\/\//i.test(String(location?.href || ''))) return;
+    try {
+      Promise.resolve(fetch(VISIT_COUNTER_URL))
+        .then(res => (res && res.ok ? res.json() : null))
+        .then(data => {
+          const raw = String(data?.count ?? '').trim();
+          if (!/^\d[\d,\s]*$/.test(raw)) return;
+          out.textContent = raw;
+          wrap.hidden = false;
+          appendLog(`RX COUNTER // ${raw} VISITS LOGGED.`);
+        })
+        .catch(() => {});
+    } catch { /* ignore restricted fetch contexts */ }
+  }
+
   stampSession();
   renderLog();
   renderStaticCharts();
@@ -2617,4 +2639,5 @@
   updateJackIndicator(0, reduced.matches);
   reflectRoute();
   reflectSweep();
+  loadVisitCounter();
 })();

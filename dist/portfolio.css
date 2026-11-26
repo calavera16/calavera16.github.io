@@ -65,6 +65,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
   gap: 0 1.5ch;
 }
 .band-mode, .band-epoch { font-weight: 500; opacity: .8; }
+.band-visits { font-weight: 600; opacity: .88; white-space: nowrap; }
 .console-heading {
   display: flex;
   align-items: center;
@@ -1685,6 +1686,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outlin
   body .media-lightbox,
   body .cmd-palette,
   body .crt-scanlines,
+  body .band-visits,
   body .state-tag {
     display: none !important;
   }

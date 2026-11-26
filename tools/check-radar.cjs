@@ -1746,7 +1746,7 @@ test("Portfolio head includes OpenGraph/Twitter metadata, cache-busted CSS, and 
   assert.match(html, /<meta name="twitter:card" content="summary">/);
   assert.match(html, /<meta name="twitter:title" content="Yeon Jun Kim \/\/ Portfolio">/);
   assert.match(html, /<meta name="twitter:description" content="[^"]+Hallym University[^"]+">/);
-  assert.match(html, /href="portfolio\.css\?v=dossier-fluid-7"/);
+  assert.match(html, /href="portfolio\.css\?v=dossier-fluid-8"/);
   assert.match(html, /href="typography\.css\?v=site-type-1"/);
   assert.match(html, /src="portfolio\.js\?v=projects-1"/);
 
@@ -2239,4 +2239,41 @@ test("QA seams: palette backdrop click, cross-route cut/ping, mobile iOS zoom/ke
   const printBlock = css.slice(printPos);
   assert.match(printBlock, /body \.jack-layer\s*\{[^}]*background:\s*transparent !important/s, 'print keeps stacked ASCII Jack layers non-occluding');
   assert.ok(printBlock.includes('body .tag-chip'), 'print renders About tag chips in dark ink on white paper');
+});
+
+test("GoatCounter visit counter embeds tracking cleanly, displays fetched count in console band, and fails silently offline", async () => {
+  const landing = fs.readFileSync("dist/index.html", "utf8");
+  for (const page of [html, landing]) {
+    assert.match(page, /data-goatcounter="https:\/\/calavera16\.goatcounter\.com\/count"[^>]*src="https:\/\/gc\.zgo\.at\/count\.js"/);
+  }
+  // Offline default (no fetch) keeps #visit-counter cleanly hidden.
+  const offline = harness();
+  assert.equal(offline.id('visit-counter').hidden, true);
+
+  // Successful TOTAL.json fetch reveals formatted count and logs telemetry.
+  const urls = [];
+  const live = harness({
+    extras: {
+      fetch: url => {
+        urls.push(url);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ count: '1,234', count_unique: '1,234' }) });
+      },
+    },
+  });
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.deepEqual(urls, ['https://calavera16.goatcounter.com/counter/TOTAL.json']);
+  assert.equal(live.id('visit-counter').hidden, false);
+  assert.equal(live.id('visit-count').textContent, '1,234');
+  assert.match(live.id('telemetry-log').children.at(-1).textContent, /RX COUNTER \/\/ 1,234 VISITS LOGGED\./);
+
+  // Blocked or 403 responses stay cleanly hidden without throwing.
+  const blocked = harness({
+    extras: { fetch: () => Promise.reject(new Error('blocked')) },
+  });
+  const forbidden = harness({
+    extras: { fetch: () => Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({}) }) },
+  });
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  assert.equal(blocked.id('visit-counter').hidden, true);
+  assert.equal(forbidden.id('visit-counter').hidden, true);
 });
